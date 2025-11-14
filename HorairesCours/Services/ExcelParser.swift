@@ -34,37 +34,80 @@ class ExcelParser {
         let rows = worksheet.data?.rows ?? []
         let sharedStrings = try? xlsx.parseSharedStrings()
         
-        // La colonne A contient "Volée" (en-tête), puis la liste des cursus
+        var consecutiveNonVoleeCount = 0
+        
+        // Lire uniquement la colonne A (Volée)
         for (index, row) in rows.enumerated() {
             if index == 0 { continue } // Skip l'en-tête "Volée"
             
             let cells = row.cells
-            if let volee = getCellValueOptimized(cells, at: 0, sharedStrings: sharedStrings), !volee.isEmpty {
-                // Nettoyer : enlever "Temps Plein", "Temps partiel", "Partiel", "Plein", "Tous"
-                var cleanedVolee = volee
-                    .replacingOccurrences(of: " Temps plein", with: "", options: .caseInsensitive)
-                    .replacingOccurrences(of: " Temps Plein", with: "", options: .caseInsensitive)
-                    .replacingOccurrences(of: " Temps partiel", with: "", options: .caseInsensitive)
-                    .replacingOccurrences(of: " Temps Partiel", with: "", options: .caseInsensitive)
-                    .replacingOccurrences(of: " Partiel", with: "", options: .caseInsensitive)
-                    .replacingOccurrences(of: " Plein", with: "", options: .caseInsensitive)
-                    .replacingOccurrences(of: " Tous", with: "", options: .caseInsensitive)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let volee = getCellValueOptimized(cells, at: 0, sharedStrings: sharedStrings), !volee.isEmpty else {
+                continue
+            }
+            
+            // Nettoyer : enlever "Temps Plein", "Temps partiel", "Partiel", "Plein", "Tous"
+            var cleanedVolee = volee
+                .replacingOccurrences(of: " Temps plein", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: " Temps Plein", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: " Temps partiel", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: " Temps Partiel", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: " Partiel", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: " Plein", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: " Tous", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: " (8 semestres)", with: "", options: .caseInsensitive)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // Vérifier si c'est une vraie volée (commence par ICLS, IPS, MScIPS, ou Etudiants)
+            let lowercased = cleanedVolee.lowercased()
+            let startsWithValidPrefix = lowercased.hasPrefix("icls") ||
+                                       lowercased.hasPrefix("ips") ||
+                                       lowercased.hasPrefix("mscips") ||
+                                       lowercased.hasPrefix("etudiants")
+            
+            // Si ce n'est pas une volée, on compte
+            if !startsWithValidPrefix {
+                consecutiveNonVoleeCount += 1
+                // Si on a 3 lignes consécutives qui ne sont pas des volées, on arrête
+                if consecutiveNonVoleeCount >= 3 {
+                    print("🛑 Arrêt de la lecture - fin de la section des volées")
+                    break
+                }
+                continue
+            }
+            
+            // Réinitialiser le compteur si on trouve une volée
+            consecutiveNonVoleeCount = 0
+            
+            // Gérer les cursus multiples séparés par "/"
+            let parts = cleanedVolee.components(separatedBy: "/")
+            for part in parts {
+                let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
+                let partLowercased = trimmed.lowercased()
                 
-                // Gérer les cursus multiples séparés par "/"
-                let parts = cleanedVolee.components(separatedBy: "/")
-                for part in parts {
-                    let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmed.isEmpty && !trimmed.lowercased().contains("volée") {
-                        voleesSet.insert(trimmed)
-                        print("🎓 Volée trouvée: '\(trimmed)'")
+                // Vérifier que cette partie est aussi une vraie volée
+                let partIsValid = partLowercased.hasPrefix("icls") ||
+                                partLowercased.hasPrefix("ips") ||
+                                partLowercased.hasPrefix("mscips") ||
+                                partLowercased.hasPrefix("etudiants")
+                
+                if partIsValid && trimmed.count >= 3 {
+                    // Nettoyer les préfixes de chiffres seuls (comme "7 IPS 7-24" -> "IPS 7-24")
+                    var finalTrimmed = trimmed
+                    
+                    let components = trimmed.components(separatedBy: " ")
+                    if components.count > 1, let firstComponent = components.first, firstComponent.allSatisfy({ $0.isNumber }) {
+                        finalTrimmed = components.dropFirst().joined(separator: " ")
                     }
+                    
+                    voleesSet.insert(finalTrimmed)
+                    print("🎓 Volée trouvée: '\(finalTrimmed)'")
                 }
             }
         }
         
         let sortedVolees = Array(voleesSet).sorted()
         print("✅ Total volées extraites: \(sortedVolees.count)")
+        print("📋 Liste finale: \(sortedVolees)")
         
         return sortedVolees
     }
@@ -105,7 +148,9 @@ class ExcelParser {
             
             let cells = row.cells
             
-            let dateStr = getCellValueOptimized(cells, at: 1, sharedStrings: sharedStrings) ?? ""
+            // ✅ LIRE LA DATE DIFFÉREMMENT
+            let dateStr = getDateCellValue(cells, at: 1, sharedStrings: sharedStrings) ?? ""
+            
             let heureDebut = getCellValueOptimized(cells, at: 2, sharedStrings: sharedStrings) ?? ""
             let heureFin = getCellValueOptimized(cells, at: 3, sharedStrings: sharedStrings) ?? ""
             let cours = getCellValueOptimized(cells, at: 5, sharedStrings: sharedStrings) ?? ""
@@ -121,7 +166,14 @@ class ExcelParser {
             }
             
             guard !cours.isEmpty else { continue }
-            guard let date = parseDate(dateStr) else { continue }
+            guard let date = parseDate(dateStr) else {
+                print("⚠️ Ligne \(index): Date invalide '\(dateStr)'")
+                continue
+            }
+            
+            let formatter = DateFormatter()
+            formatter.dateFormat = "dd/MM/yyyy"
+            print("✅ Ligne \(index): Date Excel '\(dateStr)' -> Date parsée: \(formatter.string(from: date)) | Cours: '\(cours)'")
             
             let heureComplete = formatHeure(debut: heureDebut, fin: heureFin)
             
@@ -140,6 +192,30 @@ class ExcelParser {
         
         print("✅ Total schedules créés: \(scheduleItems.count)")
         return scheduleItems
+    }
+
+    // ✅ NOUVELLE FONCTION pour lire spécifiquement les cellules de date
+    private static func getDateCellValue(_ cells: [Cell], at index: Int, sharedStrings: SharedStrings?) -> String? {
+        guard index < cells.count else { return nil }
+        let cell = cells[index]
+        
+        // Essayer de lire depuis les shared strings d'abord
+        if let sharedStrings = sharedStrings,
+           let stringValue = cell.stringValue(sharedStrings) {
+            return stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        // Si la cellule a une valeur de type "inline string"
+        if let inlineString = cell.inlineString {
+            return inlineString.text?.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        // Sinon, si c'est un nombre (serial date), on le retourne tel quel
+        if let value = cell.value {
+            return value.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        return nil
     }
     
     // Nouvelle fonction de matching avec volée + modalités
@@ -205,10 +281,16 @@ class ExcelParser {
         // Vérifier si c'est un serial number Excel (un nombre)
         if let serialNumber = Double(dateString) {
             // Excel compte les jours depuis le 1er janvier 1900
-            let excelEpoch = Date(timeIntervalSince1970: -2209161600) // 1er janvier 1900
-            let daysToAdd = serialNumber - 2 // -2 pour corriger le bug Excel
+            // Excel a un bug historique : il considère 1900 comme bissextile (ce qui est faux)
+            // Donc pour les dates après le 28 février 1900, il faut soustraire 1 jour
             
-            if let date = Calendar.current.date(byAdding: .day, value: Int(daysToAdd), to: excelEpoch) {
+            // Utilisons la méthode standard : epoch Excel = 1er janvier 1900
+            let referenceDate = DateComponents(calendar: Calendar.current, year: 1899, month: 12, day: 30)
+            guard let excelEpoch = Calendar.current.date(from: referenceDate) else { return nil }
+            
+            let daysToAdd = Int(serialNumber)
+            
+            if let date = Calendar.current.date(byAdding: .day, value: daysToAdd, to: excelEpoch) {
                 return date
             }
         }

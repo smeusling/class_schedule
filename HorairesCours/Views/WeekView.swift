@@ -120,8 +120,6 @@ struct WeekView: View {
     }
 }
 
-// Le reste des composants (WeekNavigationFooter, DaySection, etc.) reste identique
-
 // MARK: - Footer avec navigation
 struct WeekNavigationFooter: View {
     let onPrevious: () -> Void
@@ -167,6 +165,64 @@ struct WeekNavigationFooter: View {
 struct DaySection: View {
     let date: Date
     let schedules: [CourseSchedule]
+    
+    // ✅ AJOUT : Trier les cours par heure de début
+    var sortedSchedules: [CourseSchedule] {
+        let sorted = schedules.sorted { schedule1, schedule2 in
+            // Extraire l'heure de début de chaque cours
+            let time1 = extractStartTime(from: schedule1.heure)
+            let time2 = extractStartTime(from: schedule2.heure)
+            
+            // DEBUG
+            print("📊 Comparaison: '\(schedule1.heure)' (time: \(time1)) vs '\(schedule2.heure)' (time: \(time2))")
+            
+            return time1 < time2
+        }
+        
+        // DEBUG: Afficher l'ordre final
+        print("✅ Ordre final pour \(dayName):")
+        for (index, schedule) in sorted.enumerated() {
+            print("  \(index + 1). \(schedule.heure) - \(schedule.cours)")
+        }
+        
+        return sorted
+    }
+    
+    // ✅ FONCTION : Extraire l'heure de début (ex: "09:00 - 13:00" -> 540)
+    func extractStartTime(from heureString: String) -> Int {
+        // Séparer par " - " pour obtenir l'heure de début
+        let components = heureString.components(separatedBy: " - ")
+        guard let startTime = components.first?.trimmingCharacters(in: .whitespaces) else {
+            print("⚠️ Impossible de parser '\(heureString)'")
+            return 0
+        }
+        
+        // Vérifier si c'est au format "HH:MM" ou juste "HH"
+        if startTime.contains(":") {
+            // Format "HH:MM"
+            let timeParts = startTime.components(separatedBy: ":")
+            guard timeParts.count == 2,
+                  let hours = Int(timeParts[0]),
+                  let minutes = Int(timeParts[1]) else {
+                print("⚠️ Format HH:MM invalide pour '\(startTime)'")
+                return 0
+            }
+            
+            let totalMinutes = hours * 60 + minutes
+            print("🕐 '\(startTime)' = \(totalMinutes) minutes")
+            return totalMinutes
+        } else {
+            // Format "HH" (sans minutes)
+            guard let hours = Int(startTime) else {
+                print("⚠️ Format HH invalide pour '\(startTime)'")
+                return 0
+            }
+            
+            let totalMinutes = hours * 60
+            print("🕐 '\(startTime)' (sans minutes) = \(totalMinutes) minutes")
+            return totalMinutes
+        }
+    }
     
     var dayName: String {
         let formatter = DateFormatter()
@@ -225,7 +281,7 @@ struct DaySection: View {
             .padding()
             .background(Color.white)
             
-            // Liste des cours
+            // Liste des cours (TRIÉS par heure)
             if schedules.isEmpty {
                 HStack {
                     Spacer()
@@ -238,7 +294,8 @@ struct DaySection: View {
                 .background(Color.white)
             } else {
                 VStack(spacing: 1) {
-                    ForEach(schedules) { schedule in
+                    // ✅ UTILISER sortedSchedules au lieu de schedules
+                    ForEach(sortedSchedules) { schedule in
                         NavigationLink(destination: CourseDetailView(schedule: schedule)) {
                             CourseCell(schedule: schedule)
                         }
@@ -254,8 +311,7 @@ struct DaySection: View {
         }
     }
 }
-
-// MARK: - Cell de cours
+// MARK: - Cell de cours (reste identique)
 struct CourseCell: View {
     let schedule: CourseSchedule
     
@@ -320,7 +376,7 @@ struct CourseCell: View {
     }
 }
 
-// MARK: - Vue détail du cours
+// MARK: - Vue détail du cours (reste identique)
 struct CourseDetailView: View {
     let schedule: CourseSchedule
     @Environment(\.dismiss) private var dismiss

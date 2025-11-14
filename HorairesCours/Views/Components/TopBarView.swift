@@ -17,8 +17,8 @@ struct TopBarView: View {
             
             Spacer()
             
-            if let cursus = $viewModel.selectedCursus {
-                Text(cursus)
+            if let volee = viewModel.selectedVolee {
+                Text(volee)
                     .font(.system(size: 12))
                     .foregroundColor(.white.opacity(0.8))
                     .lineLimit(1)
@@ -33,28 +33,27 @@ struct TopBarView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(viewModel.selectedView == type ? Color.blue : Color.clear)//
+                    .background(viewModel.selectedView == type ? Color.blue : Color.clear)
                     .foregroundColor(.white)
-                                        .cornerRadius(6)
-                                        .font(.system(size: 14))
-                                    }
-                                }
-                                
-                                Spacer()
-                                
-                                Button(action: {
-                                    Task { await viewModel.refreshData() }
-                                }) {
-                                    Image(systemName: "arrow.clockwise")
-                                        .foregroundColor(.white)
-                                        .font(.system(size: 20))
-                                        .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
-                                        .animation(viewModel.isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
-                                }
-                                .disabled(viewModel.isLoading)
-                            }
-                            .padding()
-                            .background(Color(red: 0.2, green: 0.25, blue: 0.3))
-                        }
-                    }
-
+                    .cornerRadius(6)
+                    .font(.system(size: 14))
+                }
+            }
+            
+            Spacer()
+            
+            Button(action: {
+                Task { await viewModel.refreshData() }
+            }) {
+                Image(systemName: "arrow.clockwise")
+                    .foregroundColor(.white)
+                    .font(.system(size: 20))
+                    .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
+                    .animation(viewModel.isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+            }
+            .disabled(viewModel.isLoading)
+        }
+        .padding()
+        .background(Color(red: 0.2, green: 0.25, blue: 0.3))
+    }
+}

@@ -20,7 +20,7 @@ class ScheduleViewModel: ObservableObject {
     }
     @Published var selectedCourse: String = ""
     @Published var selectedView: ViewType = .week
-    @Published var selectedDate = Date()
+    @Published var selectedDate = Date() // ✅ Initialiser avec la date d'aujourd'hui
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var lastUpdateDate: Date?
@@ -83,9 +83,10 @@ class ScheduleViewModel: ObservableObject {
                 schedules = cachedSchedules
                 courses = Array(Set(cachedSchedules.map { $0.cours })).sorted()
                 
-                if let firstDate = cachedSchedules.first?.date {
-                    selectedDate = firstDate
-                }
+                // ✅ NE PLUS changer selectedDate ici - garder la date du jour
+                // Supprimé : if let firstDate = cachedSchedules.first?.date {
+                //     selectedDate = firstDate
+                // }
                 
                 if !courses.isEmpty && selectedCourse.isEmpty {
                     selectedCourse = courses[0]
@@ -179,10 +180,11 @@ class ScheduleViewModel: ObservableObject {
             schedules = parsed
             courses = Array(Set(parsed.map { $0.cours })).sorted()
             
-            if let firstDate = parsed.first?.date {
-                selectedDate = firstDate
-                print("📅 Date initialisée à: \(firstDate)")
-            }
+            // ✅ NE PLUS changer selectedDate ici - garder la date du jour
+            // Supprimé : if let firstDate = parsed.first?.date {
+            //     selectedDate = firstDate
+            //     print("📅 Date initialisée à : \(firstDate)")
+            // }
             
         } catch let error as URLError {
             errorMessage = "Erreur réseau: \(error.localizedDescription)"
