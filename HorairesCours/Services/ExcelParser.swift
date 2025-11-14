@@ -161,7 +161,10 @@ class ExcelParser {
             // Filtrer par volée ET modalités
             if let selectedVolee = selectedVolee {
                 if !matchesVoleeAndModalites(cursus: cursus, selectedVolee: selectedVolee, modalites: modalites) {
+                    print("❌ Ligne \(index): Cours '\(cours)' REJETÉ - Cursus: '\(cursus)' ne correspond pas à '\(selectedVolee)' avec modalités: \(modalites.map { $0.rawValue })")
                     continue
+                } else {
+                    print("✅ Ligne \(index): Cours '\(cours)' ACCEPTÉ - Cursus: '\(cursus)'")
                 }
             }
             
@@ -223,8 +226,11 @@ class ExcelParser {
         let cleanCursus = cursus.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanSelected = selectedVolee.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         
+        // ⚠️ Si le cursus est vide, on ne peut pas savoir à qui appartient ce cours
+        // On le rejette pour éviter d'afficher des cours qui ne concernent pas l'utilisateur
         if cleanCursus.isEmpty {
-            return true
+            print("⚠️ Cours sans cursus spécifié - REJETÉ")
+            return false
         }
         
         // Séparer les cursus multiples
