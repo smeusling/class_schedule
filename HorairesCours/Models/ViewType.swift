@@ -3,6 +3,6 @@
 import Foundation
 
 enum ViewType: String, CaseIterable {
-    case list = "List"
-    case week = "Week"
+    case list = "Liste"    // ✅ Traduit
+    case week = "Semaine"  // ✅ Traduit
 }
