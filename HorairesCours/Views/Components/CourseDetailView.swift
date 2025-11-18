@@ -21,20 +21,20 @@ struct CourseDetailView: View {
                     // Titre du cours
                     Text(schedule.cours)
                         .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(.gray)
                     
                     // Contenu du cours (en dessous du titre)
                     if !schedule.contenuCours.isEmpty {
                         Text(schedule.contenuCours)
                             .font(.system(size: 14))
-                            .foregroundColor(.white.opacity(0.9))
+                            .foregroundColor(.gray.opacity(0.7))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     
                     // Date (en bas)
                     Text(formattedDate)
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(.gray.opacity(0.7))
                         .padding(.top, 4)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
