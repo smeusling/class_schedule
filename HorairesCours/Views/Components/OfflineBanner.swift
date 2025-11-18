@@ -4,6 +4,8 @@ import SwiftUI
 
 struct OfflineBanner: View {
     let lastUpdate: Date?
+    let isOffline: Bool
+    let onRefresh: () -> Void
     
     var formattedDate: String {
         guard let date = lastUpdate else { return "Jamais" }
@@ -16,23 +18,48 @@ struct OfflineBanner: View {
     
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "wifi.slash")
-                .foregroundColor(.orange)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Mode hors ligne")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary)
+            if isOffline {
+                Image(systemName: "wifi.slash")
+                    .foregroundColor(.orange)
                 
-                Text("Dernière mise à jour: \(formattedDate)")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Mode hors ligne")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    Text("Dernière mise à jour: \(formattedDate)")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            } else {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Horaires à jour")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    Text("Mis à jour: \(formattedDate)")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
             }
             
             Spacer()
+            
+            // Bouton de rechargement
+            Button(action: onRefresh) {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.blue)
+                    .padding(8)
+                    .background(Color.blue.opacity(0.1))
+                    .clipShape(Circle())
+            }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .background(Color.orange.opacity(0.1))
+        .background(isOffline ? Color.orange.opacity(0.1) : Color.green.opacity(0.1))
     }
 }

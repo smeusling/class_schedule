@@ -34,13 +34,8 @@ struct ListView: View {
         return dates
     }
     
-    var weekInfo: String {
-        let calendar = Calendar.current
-        let weekOfYear = calendar.component(.weekOfYear, from: viewModel.selectedDate)
-        let year = calendar.component(.year, from: viewModel.selectedDate)
-        return "Semaine \(weekOfYear), \(year)"
-    }
-    
+    // Dans ListView.swift, modifie la propriété weekInfo et dateRange
+
     var dateRange: String {
         let calendar = Calendar.current
         guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: viewModel.selectedDate) else {
@@ -58,22 +53,18 @@ struct ListView: View {
         return "\(start) - \(endFormatted)"
     }
     
+    // Views/ListView.swift
+
     var body: some View {
         VStack(spacing: 0) {
-            // En-tête avec info semaine
-            VStack(spacing: 4) {
-                Text(weekInfo)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.gray)
-                
-                Text(dateRange)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.primary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Color.white)
-            .shadow(color: .black.opacity(0.05), radius: 2, y: 2)
+            // En-tête avec les dates de la semaine
+            Text(dateRange)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.white)
+                .shadow(color: .black.opacity(0.05), radius: 2, y: 2)
             
             // Liste des jours
             if viewModel.schedules.isEmpty {

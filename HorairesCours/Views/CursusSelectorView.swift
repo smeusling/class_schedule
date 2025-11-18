@@ -95,30 +95,6 @@ struct CursusSelectorView: View {
                                         viewModel.selectedModalites = [.partiel]
                                     }
                                     
-                                    // Option "Les deux"
-                                    Button(action: {
-                                        viewModel.selectedModalites = [.tempsPlein, .partiel]
-                                    }) {
-                                        HStack(spacing: 12) {
-                                            Image(systemName: viewModel.selectedModalites.count == 2 ? "circle.inset.filled" : "circle")
-                                                .foregroundColor(viewModel.selectedModalites.count == 2 ? .blue : .gray)
-                                                .font(.system(size: 24))
-                                            
-                                            Text("Les deux")
-                                                .font(.system(size: 16, weight: viewModel.selectedModalites.count == 2 ? .semibold : .regular))
-                                                .foregroundColor(.primary)
-                                            
-                                            Spacer()
-                                        }
-                                        .padding()
-                                        .background(viewModel.selectedModalites.count == 2 ? Color.blue.opacity(0.1) : Color.white)
-                                        .cornerRadius(12)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(viewModel.selectedModalites.count == 2 ? Color.blue : Color.clear, lineWidth: 2)
-                                        )
-                                        .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
-                                    }
                                     .padding(.horizontal)
                                 }
                                 
