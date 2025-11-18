@@ -4,7 +4,6 @@ import SwiftUI
 
 struct WeekView: View {
     @ObservedObject var viewModel: ScheduleViewModel
-    
     // Obtenir les dates de la semaine (Lundi à Vendredi uniquement)
     var weekDays: [Date] {
         let calendar = Calendar.current
