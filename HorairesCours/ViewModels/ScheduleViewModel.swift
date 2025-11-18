@@ -34,11 +34,9 @@ class ScheduleViewModel: ObservableObject {
         let filtered = schedules
         
         switch selectedView {
-        case .day:
-            return filtered.filter { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }
         case .week:
             return filtered.filter { isInCurrentWeek($0.date) }
-        case .list, .month:
+        case .list:
             return filtered
         }
     }

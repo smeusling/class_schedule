@@ -113,7 +113,8 @@ struct ListView: View {
                 },
                 onNext: {
                     viewModel.selectedDate = Calendar.current.date(byAdding: .weekOfYear, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate
-                }
+                },
+                viewModel: viewModel
             )
         }
         .background(Color(red: 0.95, green: 0.95, blue: 0.97))
@@ -124,20 +125,63 @@ struct ListView: View {
 struct WeekNavigationFooter: View {
     let onPrevious: () -> Void
     let onNext: () -> Void
+    @ObservedObject var viewModel: ScheduleViewModel
+    
+    // Date de la semaine précédente
+    var previousWeekRange: String {
+        let calendar = Calendar.current
+        guard let previousWeek = calendar.date(byAdding: .weekOfYear, value: -1, to: viewModel.selectedDate),
+              let weekInterval = calendar.dateInterval(of: .weekOfYear, for: previousWeek) else {
+            return ""
+        }
+        
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateFormat = "d MMM"
+        
+        let start = formatter.string(from: weekInterval.start)
+        let end = calendar.date(byAdding: .day, value: 6, to: weekInterval.start)!
+        let endFormatted = formatter.string(from: end)
+        
+        return "\(start) - \(endFormatted)"
+    }
+    
+    // Date de la semaine suivante
+    var nextWeekRange: String {
+        let calendar = Calendar.current
+        guard let nextWeek = calendar.date(byAdding: .weekOfYear, value: 1, to: viewModel.selectedDate),
+              let weekInterval = calendar.dateInterval(of: .weekOfYear, for: nextWeek) else {
+            return ""
+        }
+        
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateFormat = "d MMM"
+        
+        let start = formatter.string(from: weekInterval.start)
+        let end = calendar.date(byAdding: .day, value: 6, to: weekInterval.start)!
+        let endFormatted = formatter.string(from: end)
+        
+        return "\(start) - \(endFormatted)"
+    }
     
     var body: some View {
         HStack(spacing: 0) {
             // Bouton Semaine précédente
             Button(action: onPrevious) {
-                HStack {
+                HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text("Précédent")
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: 14, weight: .semibold))
+                    
+                    Text(previousWeekRange)
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 .foregroundColor(.blue)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
+                .padding(.horizontal, 8)
             }
             
             Divider()
@@ -145,15 +189,19 @@ struct WeekNavigationFooter: View {
             
             // Bouton Semaine suivante
             Button(action: onNext) {
-                HStack {
-                    Text("Suivant")
-                        .font(.system(size: 15, weight: .medium))
+                HStack(spacing: 4) {
+                    Text(nextWeekRange)
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                 }
                 .foregroundColor(.blue)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
+                .padding(.horizontal, 8)
             }
         }
         .background(Color.white)

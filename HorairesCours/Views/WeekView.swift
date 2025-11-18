@@ -104,17 +104,20 @@ struct WeekView: View {
             }
             
             // Footer avec navigation semaine
-            WeekNavigationFooter(
-                onPrevious: {
-                    viewModel.selectedDate = Calendar.current.date(byAdding: .weekOfYear, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate
-                },
-                onNext: {
-                    viewModel.selectedDate = Calendar.current.date(byAdding: .weekOfYear, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate
+                        WeekNavigationFooter(
+                            onPrevious: {
+                                viewModel.selectedDate = Calendar.current.date(byAdding: .weekOfYear, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate
+                            },
+                            onNext: {
+                                viewModel.selectedDate = Calendar.current.date(byAdding: .weekOfYear, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate
+                            },
+                            viewModel: viewModel
+                        )
+                    }
+                    .background(Color(red: 0.95, green: 0.95, blue: 0.97))
                 }
-            )
-        }
-        .background(Color(red: 0.95, green: 0.95, blue: 0.97))
-    }
+            
+    
 }
 
 // MARK: - Ligne d'un jour (row horizontale)
