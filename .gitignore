@@ -14,3 +14,29 @@ build/
 *.ipa
 *.dSYM.zip
 *.dSYM
+# Xcode user-specific files
+   *.xcuserstate
+   *.xcuserdatad
+   *.xcuserdata
+   xcuserdata/
+   
+   # Xcode workspace
+   *.xcworkspace/xcuserdata/
+   
+   # Other Xcode
+   *.moved-aside
+   *.xccheckout
+   *.xcscmblueprint
+   DerivedData/
+   *.hmap
+   *.ipa
+   *.dSYM.zip
+   *.dSYM
+   
+   # SwiftPM
+   .build/
+   .swiftpm/
+   
+   # macOS
+   .DS_Store
+

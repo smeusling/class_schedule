@@ -56,4 +56,22 @@ class StorageManager {
     func setLastUpdateDate(_ date: Date) {
         UserDefaults.standard.set(date, forKey: "lastUpdateDate")
     }
+    
+    // ✅ NOUVEAU : Gérer la date de modification HTTP du fichier
+    func getFileModificationDate() -> Date? {
+        UserDefaults.standard.object(forKey: "fileModificationDate") as? Date
+    }
+    
+    func setFileModificationDate(_ date: Date) {
+        UserDefaults.standard.set(date, forKey: "fileModificationDate")
+    }
+    
+    // ✅ NOUVEAU : Gérer la date extraite depuis le fichier Excel
+    func getExcelHeaderDate() -> Date? {
+        UserDefaults.standard.object(forKey: "excelHeaderDate") as? Date
+    }
+    
+    func setExcelHeaderDate(_ date: Date) {
+        UserDefaults.standard.set(date, forKey: "excelHeaderDate")
+    }
 }

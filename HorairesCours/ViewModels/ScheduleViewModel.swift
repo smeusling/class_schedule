@@ -27,6 +27,10 @@ class ScheduleViewModel: ObservableObject {
     @Published var isOfflineMode = false
     @Published var showCursusSelector = false
     
+    // ✅ NOUVEAU : Alertes de mise à jour
+    @Published var showUpdateAlert = false
+    @Published var updateAlertMessage = ""
+    
     private let excelURL = "https://www.unil.ch/files/live/sites/fbm/files/06-espaces/sciences-infirmieres/20251106_Horaire_Automne_2025.xlsx"
     private var storageManager: StorageManager?
     
@@ -34,12 +38,10 @@ class ScheduleViewModel: ObservableObject {
         let filtered = schedules
         
         switch selectedView {
-        case .day:
-            return filtered.filter { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }
+        case .list:
+            return filtered.filter { isInCurrentWeek($0.date) }
         case .week:
             return filtered.filter { isInCurrentWeek($0.date) }
-        case .list, .month:
-            return filtered
         }
     }
     
@@ -83,10 +85,6 @@ class ScheduleViewModel: ObservableObject {
                 schedules = cachedSchedules
                 courses = Array(Set(cachedSchedules.map { $0.cours })).sorted()
                 
-                if let firstDate = cachedSchedules.first?.date {
-                    selectedDate = firstDate
-                }
-                
                 if !courses.isEmpty && selectedCourse.isEmpty {
                     selectedCourse = courses[0]
                 }
@@ -97,6 +95,69 @@ class ScheduleViewModel: ObservableObject {
             }
         } catch {
             print("❌ Erreur lors du chargement du cache: \(error)")
+        }
+    }
+    
+    // ✅ NOUVEAU : Vérifier si le fichier a été mis à jour
+    func checkForUpdates() async {
+        guard let storageManager = storageManager else { return }
+        guard selectedVolee != nil else { return }
+        
+        print("🔍 Vérification des mises à jour...")
+        
+        do {
+            guard let url = URL(string: excelURL) else { return }
+            
+            var request = URLRequest(url: url)
+            request.httpMethod = "HEAD" // Utiliser HEAD pour ne télécharger que les headers
+            request.timeoutInterval = 10
+            
+            let (_, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                print("⚠️ Impossible de vérifier les mises à jour")
+                return
+            }
+            
+            // Récupérer la date de dernière modification depuis les headers
+            if let lastModifiedString = httpResponse.value(forHTTPHeaderField: "Last-Modified") {
+                print("📅 Date serveur (HTTP): \(lastModifiedString)")
+                
+                let dateFormatter = DateFormatter()
+                dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+                dateFormatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+                dateFormatter.timeZone = TimeZone(abbreviation: "GMT")
+                
+                if let serverDate = dateFormatter.date(from: lastModifiedString) {
+                    let savedDate = storageManager.getFileModificationDate()
+                    
+                    print("📅 Date sauvegardée: \(savedDate?.description ?? "aucune")")
+                    print("📅 Date serveur: \(serverDate.description)")
+                    
+                    // Vérifier si le fichier a changé
+                    if let savedDate = savedDate {
+                        if serverDate > savedDate {
+                            print("🆕 Nouvelle version disponible!")
+                            
+                            let displayFormatter = DateFormatter()
+                            displayFormatter.locale = Locale(identifier: "fr_FR")
+                            displayFormatter.dateStyle = .long
+                            displayFormatter.timeStyle = .short
+                            
+                            updateAlertMessage = "Une nouvelle version des horaires est disponible (mise à jour le \(displayFormatter.string(from: serverDate))).\n\nVoulez-vous recharger les horaires ?"
+                            showUpdateAlert = true
+                        } else {
+                            print("✅ Fichier à jour")
+                        }
+                    } else {
+                        print("ℹ️ Première vérification, pas de date sauvegardée")
+                    }
+                }
+            }
+            
+        } catch {
+            print("❌ Erreur lors de la vérification: \(error)")
         }
     }
     
@@ -159,11 +220,44 @@ class ScheduleViewModel: ObservableObject {
             }
             
             print("🌐 Téléchargement du fichier Excel...")
-            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse,
                   httpResponse.statusCode == 200 else {
                 throw URLError(.badServerResponse)
+            }
+            
+            // ✅ Récupérer la date de dernière modification depuis les headers
+            if let lastModifiedString = httpResponse.value(forHTTPHeaderField: "Last-Modified") {
+                print("📅 Date de dernière modification (HTTP): \(lastModifiedString)")
+                
+                let dateFormatter = DateFormatter()
+                dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+                dateFormatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+                dateFormatter.timeZone = TimeZone(abbreviation: "GMT")
+                
+                if let fileModificationDate = dateFormatter.date(from: lastModifiedString) {
+                    let displayFormatter = DateFormatter()
+                    displayFormatter.locale = Locale(identifier: "fr_FR")
+                    displayFormatter.dateFormat = "dd/MM/yyyy à HH:mm"
+                    print("✅ Fichier HTTP modifié le: \(displayFormatter.string(from: fileModificationDate))")
+                    
+                    storageManager.setFileModificationDate(fileModificationDate)
+                }
+            }
+            
+            // ✅ Extraire la date depuis l'en-tête du fichier Excel
+            if let excelHeaderDate = ExcelParser.extractUpdateDate(data) {
+                let displayFormatter = DateFormatter()
+                displayFormatter.locale = Locale(identifier: "fr_FR")
+                displayFormatter.dateFormat = "dd/MM/yyyy"
+                print("📅 Date dans l'en-tête Excel: \(displayFormatter.string(from: excelHeaderDate))")
+                
+                storageManager.setExcelHeaderDate(excelHeaderDate)
             }
             
             print("✅ Fichier téléchargé, parsing en cours...")
@@ -178,11 +272,6 @@ class ScheduleViewModel: ObservableObject {
             
             schedules = parsed
             courses = Array(Set(parsed.map { $0.cours })).sorted()
-            
-            if let firstDate = parsed.first?.date {
-                selectedDate = firstDate
-                print("📅 Date initialisée à: \(firstDate)")
-            }
             
         } catch let error as URLError {
             errorMessage = "Erreur réseau: \(error.localizedDescription)"

@@ -74,26 +74,28 @@ struct CursusSelectorView: View {
                                 Divider()
                                     .padding(.vertical, 8)
                                 
-                                // Section Modalités
+                                // Section Modalités (exclusive - comme des radio buttons)
                                 VStack(alignment: .leading, spacing: 12) {
                                     Text("Modalité")
                                         .font(.headline)
                                         .foregroundColor(.secondary)
                                         .padding(.horizontal)
                                     
-                                    ModaliteCheckbox(
+                                    ModaliteRadioButton(
                                         modalite: .tempsPlein,
-                                        isSelected: viewModel.selectedModalites.contains(.tempsPlein)
+                                        isSelected: viewModel.selectedModalites.contains(.tempsPlein) && !viewModel.selectedModalites.contains(.partiel)
                                     ) {
-                                        toggleModalite(.tempsPlein)
+                                        viewModel.selectedModalites = [.tempsPlein]
                                     }
                                     
-                                    ModaliteCheckbox(
+                                    ModaliteRadioButton(
                                         modalite: .partiel,
-                                        isSelected: viewModel.selectedModalites.contains(.partiel)
+                                        isSelected: viewModel.selectedModalites.contains(.partiel) && !viewModel.selectedModalites.contains(.tempsPlein)
                                     ) {
-                                        toggleModalite(.partiel)
+                                        viewModel.selectedModalites = [.partiel]
                                     }
+                                    
+                                    .padding(.horizontal)
                                 }
                                 
                                 // Bouton Valider
@@ -136,14 +138,6 @@ struct CursusSelectorView: View {
             }
         }
     }
-    
-    private func toggleModalite(_ modalite: Modalite) {
-        if viewModel.selectedModalites.contains(modalite) {
-            viewModel.selectedModalites.remove(modalite)
-        } else {
-            viewModel.selectedModalites.insert(modalite)
-        }
-    }
 }
 
 struct VoleeButton: View {
@@ -178,7 +172,8 @@ struct VoleeButton: View {
     }
 }
 
-struct ModaliteCheckbox: View {
+// Nouveau composant: Radio button pour les modalités (exclusif)
+struct ModaliteRadioButton: View {
     let modalite: Modalite
     let isSelected: Bool
     let action: () -> Void
@@ -186,7 +181,7 @@ struct ModaliteCheckbox: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                Image(systemName: isSelected ? "circle.inset.filled" : "circle")
                     .foregroundColor(isSelected ? .blue : .gray)
                     .font(.system(size: 24))
                 

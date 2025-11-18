@@ -13,13 +13,15 @@ final class CourseSchedule {
     var enseignant: String
     var duration: String
     var colorRaw: String
+    var contenuCours: String  // ✅ NOUVEAU
+    var nombrePeriode: String // ✅ NOUVEAU
     
     var color: ScheduleColor {
         get { ScheduleColor(rawValue: colorRaw) ?? .blue }
         set { colorRaw = newValue.rawValue }
     }
     
-    init(id: UUID = UUID(), date: Date, heure: String, cours: String, salle: String, enseignant: String, duration: String, color: ScheduleColor) {
+    init(id: UUID = UUID(), date: Date, heure: String, cours: String, salle: String, enseignant: String, duration: String, color: ScheduleColor, contenuCours: String = "", nombrePeriode: String = "") {
         self.id = id
         self.date = date
         self.heure = heure
@@ -28,5 +30,7 @@ final class CourseSchedule {
         self.enseignant = enseignant
         self.duration = duration
         self.colorRaw = color.rawValue
+        self.contenuCours = contenuCours
+        self.nombrePeriode = nombrePeriode
     }
 }
