@@ -136,7 +136,7 @@ class ExcelParser {
         
         return scheduleItems.sorted { $0.date < $1.date }
     }
-    
+
     private static func parseWorksheet(_ worksheet: Worksheet, sharedStrings: SharedStrings?, colors: [ScheduleColor], colorIndex: inout Int, selectedVolee: String?, modalites: [Modalite]) -> [CourseSchedule] {
         var scheduleItems: [CourseSchedule] = []
         let rows = worksheet.data?.rows ?? []
@@ -148,12 +148,12 @@ class ExcelParser {
             
             let cells = row.cells
             
-            // ✅ LIRE LA DATE DIFFÉREMMENT
             let dateStr = getDateCellValue(cells, at: 1, sharedStrings: sharedStrings) ?? ""
-            
             let heureDebut = getCellValueOptimized(cells, at: 2, sharedStrings: sharedStrings) ?? ""
             let heureFin = getCellValueOptimized(cells, at: 3, sharedStrings: sharedStrings) ?? ""
+            let nombrePeriode = getCellValueOptimized(cells, at: 4, sharedStrings: sharedStrings) ?? "" // ✅ NOUVEAU (colonne E)
             let cours = getCellValueOptimized(cells, at: 5, sharedStrings: sharedStrings) ?? ""
+            let contenuCours = getCellValueOptimized(cells, at: 6, sharedStrings: sharedStrings) ?? "" // ✅ NOUVEAU (colonne G)
             let cursus = getCellValueOptimized(cells, at: 7, sharedStrings: sharedStrings) ?? ""
             let enseignant = getCellValueOptimized(cells, at: 9, sharedStrings: sharedStrings) ?? ""
             let salle = getCellValueOptimized(cells, at: 10, sharedStrings: sharedStrings) ?? ""
@@ -187,7 +187,9 @@ class ExcelParser {
                 salle: salle,
                 enseignant: enseignant,
                 duration: extractDuration(debut: heureDebut, fin: heureFin),
-                color: colors[colorIndex % colors.count]
+                color: colors[colorIndex % colors.count],
+                contenuCours: contenuCours,      // ✅ NOUVEAU
+                nombrePeriode: nombrePeriode     // ✅ NOUVEAU
             )
             scheduleItems.append(schedule)
             colorIndex += 1
