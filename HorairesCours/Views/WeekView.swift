@@ -9,21 +9,17 @@ struct WeekView: View {
     var weekDays: [Date] {
         let calendar = Calendar.current
         
-        // Obtenir le début de la semaine
         guard let weekStart = calendar.dateInterval(of: .weekOfYear, for: viewModel.selectedDate)?.start else {
             return []
         }
         
-        // Trouver le lundi de cette semaine
         var monday = weekStart
         let weekday = calendar.component(.weekday, from: weekStart)
         
-        // weekday: 1=Dimanche, 2=Lundi, 3=Mardi, etc.
-        if weekday == 1 { // Si c'est dimanche, avancer d'un jour
+        if weekday == 1 {
             monday = calendar.date(byAdding: .day, value: 1, to: weekStart)!
         }
         
-        // Générer Lundi à Vendredi (5 jours)
         var dates: [Date] = []
         for i in 0..<5 {
             if let date = calendar.date(byAdding: .day, value: i, to: monday) {
@@ -75,7 +71,7 @@ struct WeekView: View {
             .background(Color.white)
             .shadow(color: .black.opacity(0.05), radius: 2, y: 2)
             
-            // Liste des jours
+            // Liste des jours en lignes horizontales
             if viewModel.schedules.isEmpty {
                 Spacer()
                 VStack(spacing: 16) {
@@ -94,9 +90,9 @@ struct WeekView: View {
                 Spacer()
             } else {
                 ScrollView {
-                    VStack(spacing: 0) {
+                    VStack(spacing: 1) {
                         ForEach(weekDays, id: \.self) { date in
-                            DaySection(
+                            WeekDayRow(
                                 date: date,
                                 schedules: viewModel.groupedByDate[Calendar.current.startOfDay(for: date)] ?? []
                             )
@@ -104,6 +100,7 @@ struct WeekView: View {
                     }
                     .padding(.bottom, 80)
                 }
+                .background(Color(red: 0.95, green: 0.95, blue: 0.97))
             }
             
             // Footer avec navigation semaine
@@ -120,115 +117,46 @@ struct WeekView: View {
     }
 }
 
-// MARK: - Footer avec navigation
-struct WeekNavigationFooter: View {
-    let onPrevious: () -> Void
-    let onNext: () -> Void
-    
-    var body: some View {
-        HStack(spacing: 0) {
-            // Bouton Semaine précédente
-            Button(action: onPrevious) {
-                HStack {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text("Précédent")
-                        .font(.system(size: 15, weight: .medium))
-                }
-                .foregroundColor(.blue)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-            }
-            
-            Divider()
-                .frame(height: 30)
-            
-            // Bouton Semaine suivante
-            Button(action: onNext) {
-                HStack {
-                    Text("Suivant")
-                        .font(.system(size: 15, weight: .medium))
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 16, weight: .semibold))
-                }
-                .foregroundColor(.blue)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-            }
-        }
-        .background(Color.white)
-        .shadow(color: .black.opacity(0.1), radius: 8, y: -4)
-    }
-}
-
-// MARK: - Section pour un jour
-struct DaySection: View {
+// MARK: - Ligne d'un jour (row horizontale)
+struct WeekDayRow: View {
     let date: Date
     let schedules: [CourseSchedule]
     
-    // ✅ AJOUT : Trier les cours par heure de début
     var sortedSchedules: [CourseSchedule] {
-        let sorted = schedules.sorted { schedule1, schedule2 in
-            // Extraire l'heure de début de chaque cours
+        schedules.sorted { schedule1, schedule2 in
             let time1 = extractStartTime(from: schedule1.heure)
             let time2 = extractStartTime(from: schedule2.heure)
-            
-            // DEBUG
-            print("📊 Comparaison: '\(schedule1.heure)' (time: \(time1)) vs '\(schedule2.heure)' (time: \(time2))")
-            
             return time1 < time2
         }
-        
-        // DEBUG: Afficher l'ordre final
-        print("✅ Ordre final pour \(dayName):")
-        for (index, schedule) in sorted.enumerated() {
-            print("  \(index + 1). \(schedule.heure) - \(schedule.cours)")
-        }
-        
-        return sorted
     }
     
-    // ✅ FONCTION : Extraire l'heure de début (ex: "09:00 - 13:00" -> 540)
     func extractStartTime(from heureString: String) -> Int {
-        // Séparer par " - " pour obtenir l'heure de début
         let components = heureString.components(separatedBy: " - ")
         guard let startTime = components.first?.trimmingCharacters(in: .whitespaces) else {
-            print("⚠️ Impossible de parser '\(heureString)'")
             return 0
         }
         
-        // Vérifier si c'est au format "HH:MM" ou juste "HH"
         if startTime.contains(":") {
-            // Format "HH:MM"
             let timeParts = startTime.components(separatedBy: ":")
             guard timeParts.count == 2,
                   let hours = Int(timeParts[0]),
                   let minutes = Int(timeParts[1]) else {
-                print("⚠️ Format HH:MM invalide pour '\(startTime)'")
                 return 0
             }
-            
-            let totalMinutes = hours * 60 + minutes
-            print("🕐 '\(startTime)' = \(totalMinutes) minutes")
-            return totalMinutes
+            return hours * 60 + minutes
         } else {
-            // Format "HH" (sans minutes)
             guard let hours = Int(startTime) else {
-                print("⚠️ Format HH invalide pour '\(startTime)'")
                 return 0
             }
-            
-            let totalMinutes = hours * 60
-            print("🕐 '\(startTime)' (sans minutes) = \(totalMinutes) minutes")
-            return totalMinutes
+            return hours * 60
         }
     }
     
     var dayName: String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "EEEE"
-        return formatter.string(from: date).capitalized
+        formatter.dateFormat = "EEE"
+        return formatter.string(from: date).uppercased()
     }
     
     var dayNumber: String {
@@ -237,232 +165,96 @@ struct DaySection: View {
         return formatter.string(from: date)
     }
     
-    var monthName: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "MMM"
-        return formatter.string(from: date)
-    }
-    
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // En-tête du jour
-            HStack(spacing: 12) {
-                // Badge de date
-                VStack(spacing: 2) {
-                    Text(monthName.uppercased())
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.blue)
-                    
-                    Text(dayNumber)
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(.primary)
-                }
-                .frame(width: 50)
-                
-                // Nom du jour
+        HStack(alignment: .top, spacing: 0) {
+            // Colonne de la date (à gauche)
+            VStack(spacing: 4) {
                 Text(dayName)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.blue)
+                
+                Text(dayNumber)
+                    .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.primary)
-                
-                Spacer()
-                
-                // Badge nombre de cours
-                if !schedules.isEmpty {
-                    Text("\(schedules.count) cours")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.blue)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(12)
-                }
             }
-            .padding()
-            .background(Color.white)
-            
-            // Liste des cours (TRIÉS par heure)
-            if schedules.isEmpty {
-                HStack {
-                    Spacer()
-                    Text("Pas de cours")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
-                        .padding(.vertical, 20)
-                    Spacer()
-                }
-                .background(Color.white)
-            } else {
-                VStack(spacing: 1) {
-                    // ✅ UTILISER sortedSchedules au lieu de schedules
-                    ForEach(sortedSchedules) { schedule in
-                        NavigationLink(destination: CourseDetailView(schedule: schedule)) {
-                            CourseCell(schedule: schedule)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-            }
-            
-            // Séparateur entre les jours
-            Rectangle()
-                .fill(Color(red: 0.95, green: 0.95, blue: 0.97))
-                .frame(height: 8)
-        }
-    }
-}
-// MARK: - Cell de cours (reste identique)
-struct CourseCell: View {
-    let schedule: CourseSchedule
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            // Barre de couleur
-            Rectangle()
-                .fill(schedule.color.color)
-                .frame(width: 4)
-            
-            // Contenu
-            VStack(alignment: .leading, spacing: 6) {
-                // Nom du cours
-                Text(schedule.cours)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .lineLimit(2)
-                
-                // Horaire
-                HStack(spacing: 4) {
-                    Image(systemName: "clock")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                    
-                    Text(schedule.heure)
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
-                    
-                    if !schedule.duration.isEmpty {
-                        Text("•")
-                            .foregroundColor(.secondary)
-                        Text(schedule.duration)
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                
-                // Salle
-                if !schedule.salle.isEmpty {
-                    HStack(spacing: 4) {
-                        Image(systemName: "mappin.circle")
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
-                        
-                        Text(schedule.salle)
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
+            .frame(width: 60)
             .padding(.vertical, 12)
             
-            Spacer()
+            // Séparateur vertical
+            Rectangle()
+                .fill(Color.gray.opacity(0.2))
+                .frame(width: 1)
             
-            // Flèche
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.gray.opacity(0.3))
+            // Cours en scrollview horizontale
+            if schedules.isEmpty {
+                Text("Pas de cours")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(sortedSchedules) { schedule in
+                            WeekCourseCard(schedule: schedule)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                }
+            }
         }
-        .padding(.horizontal)
         .background(Color.white)
     }
 }
 
-// MARK: - Vue détail du cours (reste identique)
-struct CourseDetailView: View {
+// MARK: - Carte de cours (version horizontale compacte)
+struct WeekCourseCard: View {
     let schedule: CourseSchedule
-    @Environment(\.dismiss) private var dismiss
-    
-    var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "EEEE d MMMM yyyy"
-        return formatter.string(from: schedule.date).capitalized
-    }
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // En-tête coloré
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(schedule.cours)
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.white)
-                    
-                    Text(formattedDate)
-                        .font(.system(size: 15))
-                        .foregroundColor(.white.opacity(0.9))
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(
-                    LinearGradient(
-                        colors: [schedule.color.color.opacity(0.8), schedule.color.color],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .cornerRadius(16)
-                
-                // Informations
-                VStack(spacing: 16) {
-                    DetailRow(icon: "clock.fill", title: "Horaire", value: schedule.heure)
-                    
-                    if !schedule.duration.isEmpty {
-                        DetailRow(icon: "hourglass", title: "Durée", value: schedule.duration)
-                    }
-                    
-                    if !schedule.salle.isEmpty {
-                        DetailRow(icon: "mappin.circle.fill", title: "Salle", value: schedule.salle)
-                    }
-                    
-                    if !schedule.enseignant.isEmpty {
-                        DetailRow(icon: "person.fill", title: "Enseignant", value: schedule.enseignant)
-                    }
-                }
-                .padding()
-                .background(Color.white)
-                .cornerRadius(16)
-                .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
-            }
-            .padding()
-        }
-        .background(Color(red: 0.95, green: 0.95, blue: 0.97))
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-struct DetailRow: View {
-    let icon: String
-    let title: String
-    let value: String
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.system(size: 20))
-                .foregroundColor(.blue)
-                .frame(width: 32)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-                
-                Text(value)
-                    .font(.system(size: 16, weight: .medium))
+        NavigationLink(destination: CourseDetailView(schedule: schedule)) {
+            VStack(alignment: .leading, spacing: 6) {
+                // Horaire
+                Text(schedule.heure)
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.primary)
+                
+                // Nom du cours
+                Text(schedule.cours)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                
+                // Salle
+                if !schedule.salle.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                        
+                        Text(schedule.salle)
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                
+                // Enseignant
+                if !schedule.enseignant.isEmpty {
+                    Text(schedule.enseignant)
+                        .font(.system(size: 10))
+                        .foregroundColor(.gray)
+                        .lineLimit(1)
+                }
             }
-            
-            Spacer()
+            .padding(10)
+            .frame(width: 160, alignment: .topLeading)
+            .background(schedule.color.color)
+            .cornerRadius(10)
+            .shadow(color: .black.opacity(0.1), radius: 3, y: 2)
         }
+        .buttonStyle(PlainButtonStyle())
     }
 }
