@@ -5,6 +5,7 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase // ✅ NOUVEAU
     @StateObject private var viewModel = ScheduleViewModel()
     
     var body: some View {
@@ -51,6 +52,29 @@ struct ContentView: View {
         }
         .task {
             await viewModel.loadData()
+        }
+        // ✅ NOUVEAU : Détecter les changements de phase de l'app
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .active {
+                print("📱 App activée - vérification des mises à jour")
+                Task {
+                    await viewModel.checkForUpdates()
+                }
+            }
+        }
+        // ✅ NOUVEAU : Alerte de mise à jour
+        .alert("Mise à jour disponible", isPresented: $viewModel.showUpdateAlert) {
+            Button("Plus tard", role: .cancel) {
+                viewModel.showUpdateAlert = false
+            }
+            Button("Recharger") {
+                viewModel.showUpdateAlert = false
+                Task {
+                    await viewModel.refreshData()
+                }
+            }
+        } message: {
+            Text(viewModel.updateAlertMessage)
         }
     }
 }

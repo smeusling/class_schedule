@@ -388,4 +388,64 @@ class ExcelParser {
             return "\(minutes)min"
         }
     }
-}
+
+        // Extraire la date de mise à jour depuis l'en-tête du fichier Excel
+        static func extractUpdateDate(_ data: Data) -> Date? {
+            guard let xlsx = try? XLSXFile(data: data) else {
+                return nil
+            }
+            
+            do {
+                guard let firstWorkbook = try xlsx.parseWorkbooks().first else { return nil }
+                let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: firstWorkbook)
+                
+                guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path
+                      ?? worksheetPaths.first?.path else { return nil }
+                
+                let worksheet = try xlsx.parseWorksheet(at: horairePath)
+                let sharedStrings = try? xlsx.parseSharedStrings()
+                let rows = worksheet.data?.rows ?? []
+                
+                // Chercher dans la première ligne (row 0) la date
+                if let firstRow = rows.first {
+                    let cells = firstRow.cells
+                    
+                    // Essayer de lire toutes les cellules de la première ligne
+                    for (index, cell) in cells.enumerated() {
+                        if let value = getCellValueOptimized(cells, at: index, sharedStrings: sharedStrings),
+                           !value.isEmpty {
+                            
+                            print("📋 Cellule \(index) de la première ligne: '\(value)'")
+                            
+                            // Vérifier si c'est une date (format "Automne 2025 - 06.11.2025")
+                            if value.contains("2025") || value.contains("2024") {
+                                print("📅 Titre trouvé dans Excel: '\(value)'")
+                                
+                                // Extraire la date du format "Automne 2025 - 06.11.2025" ou "DD.MM.YYYY"
+                                if let dateMatch = value.range(of: "\\d{2}\\.\\d{2}\\.\\d{4}", options: .regularExpression) {
+                                    let dateStr = String(value[dateMatch])
+                                    print("📅 Date extraite: '\(dateStr)'")
+                                    
+                                    // Parser la date (format DD.MM.YYYY)
+                                    let formatter = DateFormatter()
+                                    formatter.dateFormat = "dd.MM.yyyy"
+                                    if let date = formatter.date(from: dateStr) {
+                                        print("✅ Date parsée avec succès: \(date)")
+                                        return date
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                print("⚠️ Aucune date trouvée dans l'en-tête Excel")
+                return nil
+                
+            } catch {
+                print("❌ Erreur lors de l'extraction de la date: \(error)")
+                return nil
+            }
+        }
+    }
+
