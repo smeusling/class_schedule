@@ -129,6 +129,7 @@ struct CursusSelectorView: View {
                 }
             }
             .navigationBarHidden(true)
+            .preferredColorScheme(.light)
         }
         .onAppear {
             if viewModel.availableVolees.isEmpty {
