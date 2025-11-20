@@ -20,7 +20,7 @@ struct ContentView: View {
                             ProgressView()
                                 .scaleEffect(1.5)
                             Text("Chargement des horaires...")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Color(white: 0.7))
                         }
                         Spacer()
                     } else if let error = viewModel.errorMessage, viewModel.schedules.isEmpty {

@@ -28,7 +28,7 @@ struct CursusSelectorView: View {
                         
                         Text("Puis choisissez votre modalité")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.7))
                     }
                     .padding(.top, 40)
                     
@@ -38,7 +38,7 @@ struct CursusSelectorView: View {
                             ProgressView()
                                 .scaleEffect(1.5)
                             Text("Chargement...")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Color(white: 0.7))
                         }
                         Spacer()
                     } else if viewModel.availableVolees.isEmpty {
@@ -57,7 +57,7 @@ struct CursusSelectorView: View {
                                 VStack(alignment: .leading, spacing: 12) {
                                     Text("Volée")
                                         .font(.headline)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(Color(white: 0.7))
                                         .padding(.horizontal)
                                     
                                     ForEach(viewModel.availableVolees, id: \.self) { volee in
@@ -78,7 +78,7 @@ struct CursusSelectorView: View {
                                 VStack(alignment: .leading, spacing: 12) {
                                     Text("Modalité")
                                         .font(.headline)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(Color(white: 0.7))
                                         .padding(.horizontal)
                                     
                                     ModaliteRadioButton(
@@ -154,7 +154,7 @@ struct VoleeButton: View {
                 
                 Text(volee)
                     .font(.system(size: 16, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
                     .multilineTextAlignment(.leading)
                 
                 Spacer()
@@ -187,7 +187,7 @@ struct ModaliteRadioButton: View {
                 
                 Text(modalite.rawValue)
                     .font(.system(size: 16, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
                 
                 Spacer()
             }

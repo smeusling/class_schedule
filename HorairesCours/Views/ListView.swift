@@ -60,7 +60,7 @@ struct ListView: View {
             // En-tête avec les dates de la semaine
             Text(dateRange)
                 .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.primary)
+                .foregroundColor(.black)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
                 .background(Color.white)
@@ -75,7 +75,7 @@ struct ListView: View {
                         .foregroundColor(.gray)
                     
                     Text("Aucun cours cette semaine")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.7))
                     
                     Button("Choisir une volée") {
                         viewModel.changeCursus()
@@ -269,14 +269,14 @@ struct DaySection: View {
                     
                     Text(dayNumber)
                         .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(.black)
                 }
                 .frame(width: 50)
                 
                 // Nom du jour
                 Text(dayName)
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
                 
                 Spacer()
                 
@@ -340,25 +340,25 @@ struct CourseCell: View {
                 // Nom du cours
                 Text(schedule.cours)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
                     .lineLimit(2)
                 
                 // Horaire
                 HStack(spacing: 4) {
                     Image(systemName: "clock")
                         .font(.system(size: 12))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.7))
                     
                     Text(schedule.heure)
                         .font(.system(size: 13))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.7))
                     
                     if !schedule.duration.isEmpty {
                         Text("•")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.7))
                         Text(schedule.duration)
                             .font(.system(size: 13))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.7))
                     }
                 }
                 
@@ -367,11 +367,11 @@ struct CourseCell: View {
                     HStack(spacing: 4) {
                         Image(systemName: "mappin.circle")
                             .font(.system(size: 12))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.7))
                         
                         Text(schedule.salle)
                             .font(.system(size: 13))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.7))
                     }
                 }
             }

@@ -54,7 +54,7 @@ struct WeekView: View {
             VStack(spacing: 4) {
                 Text(dateRange)
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(Color.white)
@@ -69,7 +69,7 @@ struct WeekView: View {
                             .foregroundColor(.gray)
                         
                         Text("Aucun cours cette semaine")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.7))
                         
                         Button("Choisir une volée") {
                             viewModel.changeCursus()
@@ -167,7 +167,7 @@ struct WeekView: View {
                     
                     Text(dayNumber)
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(.black)
                 }
                 .frame(width: 60)
                 .padding(.vertical, 12)
@@ -210,12 +210,12 @@ struct WeekView: View {
                     // Horaire
                     Text(schedule.heure)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(.black)
                     
                     // Nom du cours
                     Text(schedule.cours)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.primary)
+                        .foregroundColor(.black)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     
@@ -224,11 +224,11 @@ struct WeekView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "mappin.circle.fill")
                                 .font(.system(size: 10))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Color(white: 0.7))
                             
                             Text(schedule.salle)
                                 .font(.system(size: 11))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Color(white: 0.7))
                                 .lineLimit(1)
                         }
                     }

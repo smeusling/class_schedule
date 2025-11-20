@@ -28,7 +28,7 @@ struct DayRowView: View {
                     .fontWeight(.medium)
                 Text(dayNumber)
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
             }
             .frame(width: 50)
             

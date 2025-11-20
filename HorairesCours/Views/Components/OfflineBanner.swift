@@ -25,11 +25,11 @@ struct OfflineBanner: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Mode hors ligne")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(.black)
                     
                     Text("Dernière mise à jour: \(formattedDate)")
                         .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.7))
                 }
             } else {
                 Image(systemName: "checkmark.circle.fill")
@@ -38,11 +38,11 @@ struct OfflineBanner: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Horaires à jour")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(.black)
                     
                     Text("Mis à jour: \(formattedDate)")
                         .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.7))
                 }
             }
             
@@ -60,6 +60,6 @@ struct OfflineBanner: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .background(isOffline ? Color.orange.opacity(0.1) : Color.green.opacity(0.1))
+        .background(isOffline ? Color.orange.opacity(0.1) : Color(red: 233/255, green: 250/255, blue: 239/255))
     }
 }

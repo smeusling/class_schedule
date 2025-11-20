@@ -29,7 +29,7 @@ struct DateButton: View {
                 
                 Text(dayNumber)
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(isSelected ? .white : .primary)
+                    .foregroundColor(isSelected ? .white : .black)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)

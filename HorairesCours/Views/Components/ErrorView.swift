@@ -13,7 +13,7 @@ struct ErrorView: View {
                 .foregroundColor(.orange)
             Text(message)
                 .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
+                .foregroundColor(Color(white: 0.7))
                 .padding(.horizontal)
             Button("Réessayer", action: retry)
                 .buttonStyle(.bordered)

@@ -112,11 +112,11 @@ struct DetailRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 13))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(white: 0.7))
                 
                 Text(value)
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
             }
             
             Spacer()

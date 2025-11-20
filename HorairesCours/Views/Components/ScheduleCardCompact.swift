@@ -10,7 +10,7 @@ struct ScheduleCardCompact: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(schedule.cours)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
                     .lineLimit(2)
                 
                 if !schedule.enseignant.isEmpty {
