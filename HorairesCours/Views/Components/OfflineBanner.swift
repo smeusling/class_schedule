@@ -60,6 +60,6 @@ struct OfflineBanner: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .background(isOffline ? Color.orange.opacity(0.1) : Color(red: 233/255, green: 250/255, blue: 239/255))
+        .background(isOffline ? Color(red: 255/255, green: 246/255, blue: 230/255) : Color(red: 233/255, green: 250/255, blue: 239/255))
     }
 }
