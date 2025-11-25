@@ -68,8 +68,8 @@ struct WeekView: View {
                             .font(.system(size: 50))
                             .foregroundColor(.gray)
                         
-                        Text("Aucun cours cette semaine")
-                            .foregroundColor(Color(white: 0.7))
+                        Text(viewModel.currentFileType == .examens ? "Aucun examen cette semaine" : "Aucun cours cette semaine")
+                                            .foregroundColor(.gray)
                         
                         Button("Choisir une volée") {
                             viewModel.changeCursus()
@@ -82,9 +82,10 @@ struct WeekView: View {
                         VStack(spacing: 1) {
                             ForEach(weekDays, id: \.self) { date in
                                 WeekDayRow(
-                                    date: date,
-                                    schedules: viewModel.groupedByDate[Calendar.current.startOfDay(for: date)] ?? []
-                                )
+                                                date: date,
+                                                schedules: viewModel.groupedByDate[Calendar.current.startOfDay(for: date)] ?? [],
+                                                isExamen: viewModel.currentFileType == .examens  // ✅ NOUVEAU
+                                            )
                             }
                         }
                         .padding(.bottom, 80)
@@ -113,6 +114,7 @@ struct WeekView: View {
     struct WeekDayRow: View {
         let date: Date
         let schedules: [CourseSchedule]
+        let isExamen: Bool
         
         var sortedSchedules: [CourseSchedule] {
             schedules.sorted { schedule1, schedule2 in
@@ -179,11 +181,11 @@ struct WeekView: View {
                 
                 // Cours en scrollview horizontale
                 if schedules.isEmpty {
-                    Text("Pas de cours")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)
+                    Text(isExamen ? "Pas d'examen" : "Pas de cours")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.gray)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 20)
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {

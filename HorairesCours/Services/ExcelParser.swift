@@ -234,44 +234,11 @@ class ExcelParser {
         return scheduleItems
     }
     
-    // ✅ SOLUTION FINALE CORRIGÉE : Associer cours à (date + volée)
     private static func parseExamensWorksheet(_ worksheet: Worksheet, sharedStrings: SharedStrings?, colors: [ScheduleColor], colorIndex: inout Int, selectedVolee: String?, modalites: [Modalite]) -> [CourseSchedule] {
         var scheduleItems: [CourseSchedule] = []
         let rows = worksheet.data?.rows ?? []
         
         print("📊 Parsing examens - \(rows.count) lignes...")
-        
-        // Dictionnaire pour mapper (date + volée) -> cours
-        var coursByDateAndVolee: [String: String] = [:]
-        
-        // PREMIÈRE PASSE : Extraire tous les cours valides avec date + volée
-        for (index, row) in rows.enumerated() {
-            if index < 3 { continue }
-            
-            let cells = row.cells
-            let dateStr = getDateCellValue(cells, at: 1, sharedStrings: sharedStrings) ?? ""
-            let coursRaw = getCellValueOptimized(cells, at: 5, sharedStrings: sharedStrings) ?? ""
-            let volee = getCellValueOptimized(cells, at: 8, sharedStrings: sharedStrings) ?? ""
-            
-            // Si on a un vrai nom de cours (pas un nombre, pas vide, pas "date OK")
-            if !coursRaw.isEmpty &&
-               Int(coursRaw) == nil &&
-               !coursRaw.lowercased().contains("date ok") &&
-               !dateStr.isEmpty &&
-               !volee.isEmpty {
-                
-                // Nettoyer le texte
-                let coursClean = coursRaw.replacingOccurrences(of: " date OK", with: "", options: .caseInsensitive)
-                    .replacingOccurrences(of: "date OK", with: "", options: .caseInsensitive)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                
-                if !coursClean.isEmpty && coursClean.count > 3 {
-                    let key = "\(dateStr)_\(volee)"
-                    coursByDateAndVolee[key] = coursClean
-                    print("💾 Mémorisé cours '\(coursClean)' pour clé '\(key)'")
-                }
-            }
-        }
         
         // DEUXIÈME PASSE : Parser les examens
         for (index, row) in rows.enumerated() {
@@ -284,6 +251,7 @@ class ExcelParser {
             let arriveeControle = getCellValueOptimized(cells, at: 2, sharedStrings: sharedStrings) ?? ""
             let heureDebut = getCellValueOptimized(cells, at: 3, sharedStrings: sharedStrings) ?? ""
             let heureFin = getCellValueOptimized(cells, at: 4, sharedStrings: sharedStrings) ?? ""
+            let coursRaw = getCellValueOptimized(cells, at: 5, sharedStrings: sharedStrings) ?? ""
             let modalite = getCellValueOptimized(cells, at: 6, sharedStrings: sharedStrings) ?? ""
             let anonymisation = getCellValueOptimized(cells, at: 7, sharedStrings: sharedStrings) ?? ""
             let volee = getCellValueOptimized(cells, at: 8, sharedStrings: sharedStrings) ?? ""
@@ -291,40 +259,50 @@ class ExcelParser {
             let enseignant = getCellValueOptimized(cells, at: 10, sharedStrings: sharedStrings) ?? ""
             let salle = getCellValueOptimized(cells, at: 11, sharedStrings: sharedStrings) ?? ""
             
-            // Filtrer par volée AVANT de chercher le cours
+            // Filtrer par volée AVANT de vérifier le cours
             guard let selectedVolee = selectedVolee else { continue }
             
             if !matchesVoleeForExamens(volee: volee, modalite: modalite, option: option, selectedVolee: selectedVolee, selectedModalites: modalites) {
                 continue
             }
             
-            // ✅ Récupérer le cours depuis le dictionnaire avec (date + volée)
-            let key = "\(dateStr)_\(volee)"
-            guard let cours = coursByDateAndVolee[key], !cours.isEmpty else {
-                print("⚠️ Ligne \(index): Pas de cours trouvé pour clé '\(key)'")
-                continue
+            // ✅ VÉRIFICATION : Si le cours est juste un nombre, c'est une erreur de parsing
+            var cours = coursRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            if cours.isEmpty || Int(cours) != nil {
+                cours = "⚠️ Erreur de lecture du fichier Excel"
+                print("⚠️ Ligne \(index): Cours illisible (valeur: '\(coursRaw)'), utilisateur sera notifié")
             }
             
             print("✅ Ligne \(index): Examen '\(cours)' ACCEPTÉ - Volée: '\(volee)'")
             
+            print("✅ Ligne \(index): Examen '\(cours)' ACCEPTÉ - Volée: '\(volee)'")
+
             // Parser la date
             guard let date = parseDate(dateStr) else {
                 print("⚠️ Ligne \(index): Date invalide '\(dateStr)'")
                 continue
             }
-            
+
             let formatter = DateFormatter()
             formatter.dateFormat = "dd/MM/yyyy"
             print("✅ Ligne \(index): Date Excel '\(dateStr)' -> Date parsée: \(formatter.string(from: date)) | Examen: '\(cours)'")
-            
+
+            // 🔍 AJOUTEZ CES LOGS ICI ⬇️
+            print("🔍 DEBUG Ligne \(index): arriveeControle brut = '\(arriveeControle)'")
+            print("🔍 DEBUG Ligne \(index): heureDebut brut = '\(heureDebut)'")
+            print("🔍 DEBUG Ligne \(index): heureFin brut = '\(heureFin)'")
+
             // Construire les informations d'horaire
             let heureComplete: String
             if !arriveeControle.isEmpty && arriveeControle != "Ø" {
                 let arriveeFormatted = formatSingleHeureUniform(arriveeControle)
+                print("🔍 DEBUG Ligne \(index): arriveeControle formaté = '\(arriveeFormatted)'")
                 
                 if !heureDebut.isEmpty && !heureFin.isEmpty {
                     let debutFormatted = formatSingleHeureUniform(heureDebut)
                     let finFormatted = formatSingleHeureUniform(heureFin)
+                    print("🔍 DEBUG Ligne \(index): heureDebut formaté = '\(debutFormatted)', heureFin formaté = '\(finFormatted)'")
                     heureComplete = "Arrivée: \(arriveeFormatted) | Examen: \(debutFormatted) - \(finFormatted)"
                 } else {
                     heureComplete = "Arrivée: \(arriveeFormatted)"
@@ -338,7 +316,6 @@ class ExcelParser {
                     heureComplete = "Horaire non spécifié"
                 }
             }
-            
             // Construire le contenu de l'examen
             var contenuExamen = ""
             if !modalite.isEmpty {
@@ -592,7 +569,6 @@ class ExcelParser {
         return String(format: "%02d:%02d", hour, minute)
     }
     
-    // ✅ CORRECTION : Format d'heure uniforme (14:00) avec gestion de "8.3"
     private static func formatSingleHeureUniform(_ heure: String) -> String {
         let cleaned = heure.trimmingCharacters(in: .whitespaces)
         
@@ -601,21 +577,26 @@ class ExcelParser {
             return "00:00"
         }
         
-        // Si ça contient un point (comme "8.3" ou "13.30")
+        // ✅ CORRECTION : Si c'est un nombre avec point
         if cleaned.contains(".") {
-            let components = cleaned.components(separatedBy: ".")
-            if components.count == 2 {
-                if let hour = Int(components[0]) {
-                    // Si le deuxième composant est un seul chiffre (comme .3), le traiter comme 30 minutes
-                    if components[1].count == 1, let digit = Int(components[1]) {
-                        let minutes = digit * 10 // 3 devient 30
-                        return String(format: "%02d:%02d", hour, minutes)
-                    }
-                    // Sinon, traiter normalement
-                    else if let minute = Int(components[1]) {
-                        return String(format: "%02d:%02d", hour, minute)
+            if let doubleValue = Double(cleaned) {
+                let hours = Int(doubleValue)
+                // La partie décimale représente directement les minutes (pas une fraction)
+                let decimalPart = doubleValue - Double(hours)
+                let decimalString = String(format: "%.1f", decimalPart)
+                
+                // Extraire le chiffre après le point
+                if let dotIndex = decimalString.firstIndex(of: "."),
+                   decimalString.count > dotIndex.utf16Offset(in: decimalString) + 1 {
+                    let minuteChar = decimalString[decimalString.index(after: dotIndex)]
+                    if let minuteDigit = Int(String(minuteChar)) {
+                        let minutes = minuteDigit * 10  // .3 devient 30
+                        return String(format: "%02d:%02d", hours, minutes)
                     }
                 }
+                
+                // Fallback si on n'arrive pas à extraire
+                return String(format: "%02d:00", hours)
             }
         }
         

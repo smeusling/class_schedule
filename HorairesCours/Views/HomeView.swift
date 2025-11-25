@@ -6,7 +6,12 @@ struct HomeView: View {
     @ObservedObject var viewModel: ScheduleViewModel
     @State private var showVoleeSelector = false
     @State private var showCustomURLInput = false
-    @State private var selectedDataSource: DataSourceType = .semestreAutomne
+    @State private var selectedDataSource: DataSourceType
+    
+    init(viewModel: ScheduleViewModel) {
+            self.viewModel = viewModel
+            _selectedDataSource = State(initialValue: viewModel.currentDataSource.type)
+        }
     
     var body: some View {
         NavigationView {
@@ -119,37 +124,37 @@ struct HomeView: View {
                 }
             }
             .navigationBarHidden(true)
-            .sheet(isPresented: $showVoleeSelector) {
-                VoleeOnlySelector(viewModel: viewModel)
-            }
-            .sheet(isPresented: $showCustomURLInput) {
-                CustomURLInputView(viewModel: viewModel, isPresented: $showCustomURLInput)
-            }
+                        .sheet(isPresented: $showVoleeSelector) {
+                            VoleeOnlySelector(viewModel: viewModel)
+                        }
+                        .sheet(isPresented: $showCustomURLInput) {
+                            CustomURLInputView(viewModel: viewModel, isPresented: $showCustomURLInput)
+                        }
         }
     }
     
     private func validateAndContinue() {
-        // Définir la source de données selon la sélection
-        switch selectedDataSource {
-        case .semestreAutomne:
-            viewModel.setDataSource(DataSource.semestreAutomne)
-        case .examens:
-            viewModel.setDataSource(DataSource.examens)
-        case .customURL:
-            // L'URL personnalisée est déjà définie via CustomURLInputView
-            break
+            // Définir la source de données selon la sélection
+            switch selectedDataSource {
+            case .semestreAutomne:
+                viewModel.setDataSource(DataSource.semestreAutomne)
+            case .examens:
+                viewModel.setDataSource(DataSource.examens)
+            case .customURL:
+                // L'URL personnalisée est déjà définie via CustomURLInputView
+                break
+            }
+            
+            // Vérifier que modalité est bien sélectionnée
+            if viewModel.selectedModalites.isEmpty {
+                viewModel.selectedModalites = [.tempsPlein] // Valeur par défaut
+            }
+            
+            viewModel.showHomeView = false
+            Task {
+                await viewModel.loadData(forceRefresh: true)
+            }
         }
-        
-        // Vérifier que modalité est bien sélectionnée
-        if viewModel.selectedModalites.isEmpty {
-            viewModel.selectedModalites = [.tempsPlein] // Valeur par défaut
-        }
-        
-        viewModel.showHomeView = false
-        Task {
-            await viewModel.loadData(forceRefresh: true)
-        }
-    }
 }
 
 // Composant Radio Button pour les sources

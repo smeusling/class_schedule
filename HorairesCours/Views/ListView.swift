@@ -70,8 +70,8 @@ struct ListView: View {
                         .font(.system(size: 50))
                         .foregroundColor(.gray)
                     
-                    Text("Aucun cours cette semaine")
-                        .foregroundColor(.gray)
+                    Text(viewModel.currentFileType == .examens ? "Aucun examen cette semaine" : "Aucun cours cette semaine")
+                                        .foregroundColor(.gray)
                     
                     Button("Choisir une volée") {
                         viewModel.changeCursus()
@@ -289,19 +289,19 @@ struct DaySection: View {
                 Spacer()
                 
                 // Badge nombre de cours/examens
-                if !schedules.isEmpty {
-                    let label = schedules.count == 1
-                        ? (isExamen ? "examen" : "cours")
-                        : (isExamen ? "examens" : "cours")
-                    
-                    Text("\(schedules.count) \(label)")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.blue)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(12)
-                }
+                                if !schedules.isEmpty {
+                                    let label = schedules.count == 1
+                                        ? (isExamen ? "examen" : "cours")
+                                        : (isExamen ? "examens" : "cours")
+                                    
+                                    Text("\(schedules.count) \(label)")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(.blue)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 4)
+                                        .background(Color.blue.opacity(0.1))
+                                        .cornerRadius(12)
+                                }
             }
             .padding()
             .background(Color.white)
@@ -310,10 +310,10 @@ struct DaySection: View {
             if schedules.isEmpty {
                 HStack {
                     Spacer()
-                    Text("Pas de cours")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
-                        .padding(.vertical, 20)
+                    Text(isExamen ? "Pas d'examen" : "Pas de cours")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(.gray)
+                                            .padding(.vertical, 20)
                     Spacer()
                 }
                 .background(Color.white)
