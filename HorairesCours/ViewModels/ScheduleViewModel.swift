@@ -27,11 +27,15 @@ class ScheduleViewModel: ObservableObject {
     @Published var isOfflineMode = false
     @Published var showCursusSelector = false
     
+    // ✅ NOUVEAU : HomeView et gestion des sources
+    @Published var showHomeView = false
+    @Published var currentDataSource: DataSource = DataSource.semestreAutomne
+    @Published var currentFileType: FileType = .cours
+    
     // ✅ NOUVEAU : Alertes de mise à jour
     @Published var showUpdateAlert = false
     @Published var updateAlertMessage = ""
     
-    private let excelURL = "https://www.unil.ch/files/live/sites/fbm/files/06-espaces/sciences-infirmieres/20251106_Horaire_Automne_2025.xlsx"
     private var storageManager: StorageManager?
     
     var filteredSchedules: [CourseSchedule] {
@@ -57,16 +61,19 @@ class ScheduleViewModel: ObservableObject {
         
         loadVoleePreference()
         loadModalitesPreference()
+        loadDataSourcePreference()
         
         print("🔧 Setup - Volée chargée: \(selectedVolee ?? "nil")")
         print("🔧 Setup - Modalités: \(selectedModalites.map { $0.rawValue })")
         
         if selectedVolee == nil {
-            print("⚠️ Pas de volée sélectionnée, affichage du sélecteur")
-            showCursusSelector = true
+            print("⚠️ Pas de volée sélectionnée, affichage de HomeView")
+            showHomeView = true
         } else {
-            Task {
-                await loadFromCache()
+            if !showHomeView {
+                Task {
+                    await loadFromCache()
+                }
             }
         }
     }
@@ -98,6 +105,27 @@ class ScheduleViewModel: ObservableObject {
         }
     }
     
+    // ✅ NOUVEAU : Définir la source de données
+    func setDataSource(_ source: DataSource) {
+        currentDataSource = source
+        currentFileType = source.fileType
+        saveDataSourcePreference(source)
+    }
+    
+    private func saveDataSourcePreference(_ source: DataSource) {
+        if let encoded = try? JSONEncoder().encode(source) {
+            UserDefaults.standard.set(encoded, forKey: "currentDataSource")
+        }
+    }
+    
+    private func loadDataSourcePreference() {
+        if let data = UserDefaults.standard.data(forKey: "currentDataSource"),
+           let source = try? JSONDecoder().decode(DataSource.self, from: data) {
+            currentDataSource = source
+            currentFileType = source.fileType
+        }
+    }
+    
     // ✅ NOUVEAU : Vérifier si le fichier a été mis à jour
     func checkForUpdates() async {
         guard let storageManager = storageManager else { return }
@@ -106,10 +134,10 @@ class ScheduleViewModel: ObservableObject {
         print("🔍 Vérification des mises à jour...")
         
         do {
-            guard let url = URL(string: excelURL) else { return }
+            guard let url = URL(string: currentDataSource.url) else { return }
             
             var request = URLRequest(url: url)
-            request.httpMethod = "HEAD" // Utiliser HEAD pour ne télécharger que les headers
+            request.httpMethod = "HEAD"
             request.timeoutInterval = 10
             
             let (_, response) = try await URLSession.shared.data(for: request)
@@ -120,7 +148,6 @@ class ScheduleViewModel: ObservableObject {
                 return
             }
             
-            // Récupérer la date de dernière modification depuis les headers
             if let lastModifiedString = httpResponse.value(forHTTPHeaderField: "Last-Modified") {
                 print("📅 Date serveur (HTTP): \(lastModifiedString)")
                 
@@ -135,7 +162,6 @@ class ScheduleViewModel: ObservableObject {
                     print("📅 Date sauvegardée: \(savedDate?.description ?? "aucune")")
                     print("📅 Date serveur: \(serverDate.description)")
                     
-                    // Vérifier si le fichier a changé
                     if let savedDate = savedDate {
                         if serverDate > savedDate {
                             print("🆕 Nouvelle version disponible!")
@@ -163,10 +189,10 @@ class ScheduleViewModel: ObservableObject {
     
     func loadCursusList() async {
         isLoading = true
-        print("🔄 Chargement de la liste des volées...")
+        print("📄 Chargement de la liste des volées...")
         
         do {
-            guard let url = URL(string: excelURL) else {
+            guard let url = URL(string: currentDataSource.url) else {
                 throw URLError(.badURL)
             }
             
@@ -192,7 +218,7 @@ class ScheduleViewModel: ObservableObject {
         
         guard let selectedVolee = selectedVolee else {
             print("⚠️ Pas de volée sélectionnée")
-            showCursusSelector = true
+            showHomeView = true
             return
         }
         
@@ -202,7 +228,7 @@ class ScheduleViewModel: ObservableObject {
             return
         }
         
-        print("🔄 LoadData - Volée: \(selectedVolee), Modalités: \(selectedModalites.map { $0.rawValue }), ForceRefresh: \(forceRefresh)")
+        print("📄 LoadData - Volée: \(selectedVolee), Modalités: \(selectedModalites.map { $0.rawValue }), Type: \(currentFileType.rawValue), ForceRefresh: \(forceRefresh)")
         
         if !forceRefresh && storageManager.hasData() {
             print("💾 Chargement depuis le cache")
@@ -215,7 +241,7 @@ class ScheduleViewModel: ObservableObject {
         isOfflineMode = false
         
         do {
-            guard let url = URL(string: excelURL) else {
+            guard let url = URL(string: currentDataSource.url) else {
                 throw URLError(.badURL)
             }
             
@@ -231,7 +257,6 @@ class ScheduleViewModel: ObservableObject {
                 throw URLError(.badServerResponse)
             }
             
-            // ✅ Récupérer la date de dernière modification depuis les headers
             if let lastModifiedString = httpResponse.value(forHTTPHeaderField: "Last-Modified") {
                 print("📅 Date de dernière modification (HTTP): \(lastModifiedString)")
                 
@@ -250,7 +275,6 @@ class ScheduleViewModel: ObservableObject {
                 }
             }
             
-            // ✅ Extraire la date depuis l'en-tête du fichier Excel
             if let excelHeaderDate = ExcelParser.extractUpdateDate(data) {
                 let displayFormatter = DateFormatter()
                 displayFormatter.locale = Locale(identifier: "fr_FR")
@@ -262,9 +286,11 @@ class ScheduleViewModel: ObservableObject {
             
             print("✅ Fichier téléchargé, parsing en cours...")
             let modalitesArray = Array(selectedModalites)
-            let parsed = try ExcelParser.parse(data, selectedVolee: selectedVolee, modalites: modalitesArray)
             
-            print("✅ Parsing terminé: \(parsed.count) cours trouvés")
+            // ✅ MODIFICATION : Passer le fileType au parser
+            let parsed = try ExcelParser.parse(data, selectedVolee: selectedVolee, modalites: modalitesArray, fileType: currentFileType)
+            
+            print("✅ Parsing terminé: \(parsed.count) éléments trouvés")
             
             try storageManager.saveSchedules(parsed)
             storageManager.setLastUpdateDate(Date())
@@ -292,8 +318,8 @@ class ScheduleViewModel: ObservableObject {
     }
     
     func changeCursus() {
-        print("🔄 Changement de cursus demandé")
-        showCursusSelector = true
+        print("🔄 Retour à la page d'accueil")
+        showHomeView = true
     }
     
     private func saveVoleePreference() {

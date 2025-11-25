@@ -112,8 +112,18 @@ class ExcelParser {
         return sortedVolees
     }
     
-    // Parser avec filtre de volée ET modalités
-    static func parse(_ data: Data, selectedVolee: String?, modalites: [Modalite]) throws -> [CourseSchedule] {
+    // Parser avec filtre de volée ET modalités ET type de fichier
+    static func parse(_ data: Data, selectedVolee: String?, modalites: [Modalite], fileType: FileType) throws -> [CourseSchedule] {
+        switch fileType {
+        case .cours:
+            return try parseCoursSchedule(data, selectedVolee: selectedVolee, modalites: modalites)
+        case .examens:
+            return try parseExamensSchedule(data, selectedVolee: selectedVolee, modalites: modalites)
+        }
+    }
+    
+    // Parser pour les horaires de cours
+    private static func parseCoursSchedule(_ data: Data, selectedVolee: String?, modalites: [Modalite]) throws -> [CourseSchedule] {
         guard let xlsx = try? XLSXFile(data: data) else {
             throw NSError(domain: "ExcelParsingError", code: -1)
         }
@@ -132,12 +142,37 @@ class ExcelParser {
         let worksheet = try xlsx.parseWorksheet(at: horairePath)
         let sharedStrings = try? xlsx.parseSharedStrings()
         
-        scheduleItems = parseWorksheet(worksheet, sharedStrings: sharedStrings, colors: colors, colorIndex: &colorIndex, selectedVolee: selectedVolee, modalites: modalites)
+        scheduleItems = parseCoursWorksheet(worksheet, sharedStrings: sharedStrings, colors: colors, colorIndex: &colorIndex, selectedVolee: selectedVolee, modalites: modalites)
+        
+        return scheduleItems.sorted { $0.date < $1.date }
+    }
+    
+    // NOUVEAU : Parser pour les horaires d'examens
+    private static func parseExamensSchedule(_ data: Data, selectedVolee: String?, modalites: [Modalite]) throws -> [CourseSchedule] {
+        guard let xlsx = try? XLSXFile(data: data) else {
+            throw NSError(domain: "ExcelParsingError", code: -1)
+        }
+        
+        var scheduleItems: [CourseSchedule] = []
+        let colors = ScheduleColor.allCases
+        var colorIndex = 0
+        
+        guard let firstWorkbook = try xlsx.parseWorkbooks().first else { return [] }
+        
+        let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: firstWorkbook)
+        
+        guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path
+              ?? worksheetPaths.first?.path else { return [] }
+        
+        let worksheet = try xlsx.parseWorksheet(at: horairePath)
+        let sharedStrings = try? xlsx.parseSharedStrings()
+        
+        scheduleItems = parseExamensWorksheet(worksheet, sharedStrings: sharedStrings, colors: colors, colorIndex: &colorIndex, selectedVolee: selectedVolee, modalites: modalites)
         
         return scheduleItems.sorted { $0.date < $1.date }
     }
 
-    private static func parseWorksheet(_ worksheet: Worksheet, sharedStrings: SharedStrings?, colors: [ScheduleColor], colorIndex: inout Int, selectedVolee: String?, modalites: [Modalite]) -> [CourseSchedule] {
+    private static func parseCoursWorksheet(_ worksheet: Worksheet, sharedStrings: SharedStrings?, colors: [ScheduleColor], colorIndex: inout Int, selectedVolee: String?, modalites: [Modalite]) -> [CourseSchedule] {
         var scheduleItems: [CourseSchedule] = []
         let rows = worksheet.data?.rows ?? []
         
@@ -151,9 +186,9 @@ class ExcelParser {
             let dateStr = getDateCellValue(cells, at: 1, sharedStrings: sharedStrings) ?? ""
             let heureDebut = getCellValueOptimized(cells, at: 2, sharedStrings: sharedStrings) ?? ""
             let heureFin = getCellValueOptimized(cells, at: 3, sharedStrings: sharedStrings) ?? ""
-            let nombrePeriode = getCellValueOptimized(cells, at: 4, sharedStrings: sharedStrings) ?? "" // ✅ NOUVEAU (colonne E)
+            let nombrePeriode = getCellValueOptimized(cells, at: 4, sharedStrings: sharedStrings) ?? ""
             let cours = getCellValueOptimized(cells, at: 5, sharedStrings: sharedStrings) ?? ""
-            let contenuCours = getCellValueOptimized(cells, at: 6, sharedStrings: sharedStrings) ?? "" // ✅ NOUVEAU (colonne G)
+            let contenuCours = getCellValueOptimized(cells, at: 6, sharedStrings: sharedStrings) ?? ""
             let cursus = getCellValueOptimized(cells, at: 7, sharedStrings: sharedStrings) ?? ""
             let enseignant = getCellValueOptimized(cells, at: 9, sharedStrings: sharedStrings) ?? ""
             let salle = getCellValueOptimized(cells, at: 10, sharedStrings: sharedStrings) ?? ""
@@ -188,8 +223,8 @@ class ExcelParser {
                 enseignant: enseignant,
                 duration: extractDuration(debut: heureDebut, fin: heureFin),
                 color: colors[colorIndex % colors.count],
-                contenuCours: contenuCours,      // ✅ NOUVEAU
-                nombrePeriode: nombrePeriode     // ✅ NOUVEAU
+                contenuCours: contenuCours,
+                nombrePeriode: nombrePeriode
             )
             scheduleItems.append(schedule)
             colorIndex += 1
@@ -198,38 +233,155 @@ class ExcelParser {
         print("✅ Total schedules créés: \(scheduleItems.count)")
         return scheduleItems
     }
-
-    // ✅ NOUVELLE FONCTION pour lire spécifiquement les cellules de date
-    private static func getDateCellValue(_ cells: [Cell], at index: Int, sharedStrings: SharedStrings?) -> String? {
-        guard index < cells.count else { return nil }
-        let cell = cells[index]
-        
-        // Essayer de lire depuis les shared strings d'abord
-        if let sharedStrings = sharedStrings,
-           let stringValue = cell.stringValue(sharedStrings) {
-            return stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        
-        // Si la cellule a une valeur de type "inline string"
-        if let inlineString = cell.inlineString {
-            return inlineString.text?.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        
-        // Sinon, si c'est un nombre (serial date), on le retourne tel quel
-        if let value = cell.value {
-            return value.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        
-        return nil
-    }
     
+    // ✅ SOLUTION FINALE CORRIGÉE : Associer cours à (date + volée)
+    private static func parseExamensWorksheet(_ worksheet: Worksheet, sharedStrings: SharedStrings?, colors: [ScheduleColor], colorIndex: inout Int, selectedVolee: String?, modalites: [Modalite]) -> [CourseSchedule] {
+        var scheduleItems: [CourseSchedule] = []
+        let rows = worksheet.data?.rows ?? []
+        
+        print("📊 Parsing examens - \(rows.count) lignes...")
+        
+        // Dictionnaire pour mapper (date + volée) -> cours
+        var coursByDateAndVolee: [String: String] = [:]
+        
+        // PREMIÈRE PASSE : Extraire tous les cours valides avec date + volée
+        for (index, row) in rows.enumerated() {
+            if index < 3 { continue }
+            
+            let cells = row.cells
+            let dateStr = getDateCellValue(cells, at: 1, sharedStrings: sharedStrings) ?? ""
+            let coursRaw = getCellValueOptimized(cells, at: 5, sharedStrings: sharedStrings) ?? ""
+            let volee = getCellValueOptimized(cells, at: 8, sharedStrings: sharedStrings) ?? ""
+            
+            // Si on a un vrai nom de cours (pas un nombre, pas vide, pas "date OK")
+            if !coursRaw.isEmpty &&
+               Int(coursRaw) == nil &&
+               !coursRaw.lowercased().contains("date ok") &&
+               !dateStr.isEmpty &&
+               !volee.isEmpty {
+                
+                // Nettoyer le texte
+                let coursClean = coursRaw.replacingOccurrences(of: " date OK", with: "", options: .caseInsensitive)
+                    .replacingOccurrences(of: "date OK", with: "", options: .caseInsensitive)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                if !coursClean.isEmpty && coursClean.count > 3 {
+                    let key = "\(dateStr)_\(volee)"
+                    coursByDateAndVolee[key] = coursClean
+                    print("💾 Mémorisé cours '\(coursClean)' pour clé '\(key)'")
+                }
+            }
+        }
+        
+        // DEUXIÈME PASSE : Parser les examens
+        for (index, row) in rows.enumerated() {
+            if index < 3 { continue }
+            
+            let cells = row.cells
+            
+            let jour = getCellValueOptimized(cells, at: 0, sharedStrings: sharedStrings) ?? ""
+            let dateStr = getDateCellValue(cells, at: 1, sharedStrings: sharedStrings) ?? ""
+            let arriveeControle = getCellValueOptimized(cells, at: 2, sharedStrings: sharedStrings) ?? ""
+            let heureDebut = getCellValueOptimized(cells, at: 3, sharedStrings: sharedStrings) ?? ""
+            let heureFin = getCellValueOptimized(cells, at: 4, sharedStrings: sharedStrings) ?? ""
+            let modalite = getCellValueOptimized(cells, at: 6, sharedStrings: sharedStrings) ?? ""
+            let anonymisation = getCellValueOptimized(cells, at: 7, sharedStrings: sharedStrings) ?? ""
+            let volee = getCellValueOptimized(cells, at: 8, sharedStrings: sharedStrings) ?? ""
+            let option = getCellValueOptimized(cells, at: 9, sharedStrings: sharedStrings) ?? ""
+            let enseignant = getCellValueOptimized(cells, at: 10, sharedStrings: sharedStrings) ?? ""
+            let salle = getCellValueOptimized(cells, at: 11, sharedStrings: sharedStrings) ?? ""
+            
+            // Filtrer par volée AVANT de chercher le cours
+            guard let selectedVolee = selectedVolee else { continue }
+            
+            if !matchesVoleeForExamens(volee: volee, modalite: modalite, option: option, selectedVolee: selectedVolee, selectedModalites: modalites) {
+                continue
+            }
+            
+            // ✅ Récupérer le cours depuis le dictionnaire avec (date + volée)
+            let key = "\(dateStr)_\(volee)"
+            guard let cours = coursByDateAndVolee[key], !cours.isEmpty else {
+                print("⚠️ Ligne \(index): Pas de cours trouvé pour clé '\(key)'")
+                continue
+            }
+            
+            print("✅ Ligne \(index): Examen '\(cours)' ACCEPTÉ - Volée: '\(volee)'")
+            
+            // Parser la date
+            guard let date = parseDate(dateStr) else {
+                print("⚠️ Ligne \(index): Date invalide '\(dateStr)'")
+                continue
+            }
+            
+            let formatter = DateFormatter()
+            formatter.dateFormat = "dd/MM/yyyy"
+            print("✅ Ligne \(index): Date Excel '\(dateStr)' -> Date parsée: \(formatter.string(from: date)) | Examen: '\(cours)'")
+            
+            // Construire les informations d'horaire
+            let heureComplete: String
+            if !arriveeControle.isEmpty && arriveeControle != "Ø" {
+                let arriveeFormatted = formatSingleHeureUniform(arriveeControle)
+                
+                if !heureDebut.isEmpty && !heureFin.isEmpty {
+                    let debutFormatted = formatSingleHeureUniform(heureDebut)
+                    let finFormatted = formatSingleHeureUniform(heureFin)
+                    heureComplete = "Arrivée: \(arriveeFormatted) | Examen: \(debutFormatted) - \(finFormatted)"
+                } else {
+                    heureComplete = "Arrivée: \(arriveeFormatted)"
+                }
+            } else {
+                if !heureDebut.isEmpty && !heureFin.isEmpty {
+                    let debutFormatted = formatSingleHeureUniform(heureDebut)
+                    let finFormatted = formatSingleHeureUniform(heureFin)
+                    heureComplete = "\(debutFormatted) - \(finFormatted)"
+                } else {
+                    heureComplete = "Horaire non spécifié"
+                }
+            }
+            
+            // Construire le contenu de l'examen
+            var contenuExamen = ""
+            if !modalite.isEmpty {
+                contenuExamen = "📝 \(modalite)"
+            }
+            if !anonymisation.isEmpty {
+                if !contenuExamen.isEmpty {
+                    contenuExamen += "\n"
+                }
+                contenuExamen += "🔒 Anonymisation: \(anonymisation)"
+            }
+            if !option.isEmpty && option != "Toutes orientations" {
+                if !contenuExamen.isEmpty {
+                    contenuExamen += "\n"
+                }
+                contenuExamen += "📚 \(option)"
+            }
+            
+            let schedule = CourseSchedule(
+                date: date,
+                heure: heureComplete,
+                cours: cours,
+                salle: salle,
+                enseignant: enseignant,
+                duration: extractDuration(debut: heureDebut, fin: heureFin),
+                color: colors[colorIndex % colors.count],
+                contenuCours: contenuExamen,
+                nombrePeriode: ""
+            )
+            scheduleItems.append(schedule)
+            colorIndex += 1
+        }
+        
+        print("✅ Total examens créés: \(scheduleItems.count)")
+        return scheduleItems
+    }
+
     // Nouvelle fonction de matching avec volée + modalités
     private static func matchesVoleeAndModalites(cursus: String, selectedVolee: String, modalites: [Modalite]) -> Bool {
         let cleanCursus = cursus.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanSelected = selectedVolee.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         
         // ⚠️ Si le cursus est vide, on ne peut pas savoir à qui appartient ce cours
-        // On le rejette pour éviter d'afficher des cours qui ne concernent pas l'utilisateur
         if cleanCursus.isEmpty {
             print("⚠️ Cours sans cursus spécifié - REJETÉ")
             return false
@@ -269,6 +421,70 @@ class ExcelParser {
         return false
     }
     
+    // NOUVEAU : Fonction de matching pour les examens
+    private static func matchesVoleeForExamens(volee: String, modalite: String, option: String, selectedVolee: String, selectedModalites: [Modalite]) -> Bool {
+        let cleanVolee = volee.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let cleanSelected = selectedVolee.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let cleanModalite = modalite.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let cleanOption = option.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        
+        // Si pas de volée spécifiée dans l'examen, ne pas l'accepter
+        if cleanVolee.isEmpty {
+            print("⚠️ Examen sans volée spécifiée - REJETÉ")
+            return false
+        }
+        
+        // Gérer les volées multiples séparées par "/" ou ","
+        let voleeParts = cleanVolee.components(separatedBy: CharacterSet(charactersIn: "/,")).map { $0.trimmingCharacters(in: .whitespaces) }
+        
+        var voleeMatches = false
+        for voleePart in voleeParts {
+            if voleePart.contains(cleanSelected) {
+                voleeMatches = true
+                break
+            }
+        }
+        
+        // Si la volée ne correspond pas, rejeter
+        if !voleeMatches {
+            return false
+        }
+        
+        // Si l'option est "Toutes orientations", accepter pour toutes les modalités
+        if cleanOption.contains("toutes orientations") {
+            return true
+        }
+        
+        // Si les deux modalités sont sélectionnées, accepter
+        if selectedModalites.count == 2 {
+            return true
+        }
+        
+        // Vérifier les modalités spécifiques
+        for selectedModalite in selectedModalites {
+            switch selectedModalite {
+            case .tempsPlein:
+                // Chercher "Temps Plein" ou "Plein" dans la volée ou la modalité
+                if cleanVolee.contains("temps plein") || cleanVolee.contains("plein") ||
+                   cleanModalite.contains("temps plein") || cleanModalite.contains("plein") {
+                    return true
+                }
+            case .partiel:
+                // Chercher "Partiel" dans la volée ou la modalité
+                if cleanVolee.contains("partiel") || cleanModalite.contains("partiel") {
+                    return true
+                }
+            }
+        }
+        
+        // Si aucune modalité n'est spécifiée dans l'examen, l'accepter par défaut
+        if cleanModalite.isEmpty && !cleanVolee.contains("temps plein") && !cleanVolee.contains("plein") && !cleanVolee.contains("partiel") {
+            return true
+        }
+        
+        return false
+    }
+    
     private static func getCellValueOptimized(_ cells: [Cell], at index: Int, sharedStrings: SharedStrings?) -> String? {
         guard index < cells.count else { return nil }
         let cell = cells[index]
@@ -285,14 +501,30 @@ class ExcelParser {
         return nil
     }
     
+    // Fonction pour lire spécifiquement les cellules de date
+    private static func getDateCellValue(_ cells: [Cell], at index: Int, sharedStrings: SharedStrings?) -> String? {
+        guard index < cells.count else { return nil }
+        let cell = cells[index]
+        
+        if let sharedStrings = sharedStrings,
+           let stringValue = cell.stringValue(sharedStrings) {
+            return stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        if let inlineString = cell.inlineString {
+            return inlineString.text?.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        if let value = cell.value {
+            return value.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        return nil
+    }
+    
     private static func parseDate(_ dateString: String) -> Date? {
         // Vérifier si c'est un serial number Excel (un nombre)
         if let serialNumber = Double(dateString) {
-            // Excel compte les jours depuis le 1er janvier 1900
-            // Excel a un bug historique : il considère 1900 comme bissextile (ce qui est faux)
-            // Donc pour les dates après le 28 février 1900, il faut soustraire 1 jour
-            
-            // Utilisons la méthode standard : epoch Excel = 1er janvier 1900
             let referenceDate = DateComponents(calendar: Calendar.current, year: 1899, month: 12, day: 30)
             guard let excelEpoch = Calendar.current.date(from: referenceDate) else { return nil }
             
@@ -360,6 +592,52 @@ class ExcelParser {
         return String(format: "%02d:%02d", hour, minute)
     }
     
+    // ✅ CORRECTION : Format d'heure uniforme (14:00) avec gestion de "8.3"
+    private static func formatSingleHeureUniform(_ heure: String) -> String {
+        let cleaned = heure.trimmingCharacters(in: .whitespaces)
+        
+        // Si c'est vide, retourner une valeur par défaut
+        if cleaned.isEmpty {
+            return "00:00"
+        }
+        
+        // Si ça contient un point (comme "8.3" ou "13.30")
+        if cleaned.contains(".") {
+            let components = cleaned.components(separatedBy: ".")
+            if components.count == 2 {
+                if let hour = Int(components[0]) {
+                    // Si le deuxième composant est un seul chiffre (comme .3), le traiter comme 30 minutes
+                    if components[1].count == 1, let digit = Int(components[1]) {
+                        let minutes = digit * 10 // 3 devient 30
+                        return String(format: "%02d:%02d", hour, minutes)
+                    }
+                    // Sinon, traiter normalement
+                    else if let minute = Int(components[1]) {
+                        return String(format: "%02d:%02d", hour, minute)
+                    }
+                }
+            }
+        }
+        
+        // Si ça contient deux-points (comme "14:00")
+        if cleaned.contains(":") {
+            let components = cleaned.components(separatedBy: ":")
+            if components.count == 2,
+               let hour = Int(components[0]),
+               let minute = Int(components[1]) {
+                return String(format: "%02d:%02d", hour, minute)
+            }
+        }
+        
+        // Si c'est juste un nombre (comme "14" ou "9")
+        if let hour = Int(cleaned) {
+            return String(format: "%02d:00", hour)
+        }
+        
+        // Sinon retourner tel quel
+        return cleaned
+    }
+    
     private static func extractDuration(debut: String, fin: String) -> String {
         let debutComponents = debut.split(separator: ".")
         let finComponents = fin.split(separator: ".")
@@ -391,63 +669,130 @@ class ExcelParser {
         }
     }
 
-        // Extraire la date de mise à jour depuis l'en-tête du fichier Excel
-        static func extractUpdateDate(_ data: Data) -> Date? {
-            guard let xlsx = try? XLSXFile(data: data) else {
-                return nil
-            }
+    // Extraire la date de mise à jour depuis l'en-tête du fichier Excel
+    static func extractUpdateDate(_ data: Data) -> Date? {
+        guard let xlsx = try? XLSXFile(data: data) else {
+            return nil
+        }
+        
+        do {
+            guard let firstWorkbook = try xlsx.parseWorkbooks().first else { return nil }
+            let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: firstWorkbook)
             
-            do {
-                guard let firstWorkbook = try xlsx.parseWorkbooks().first else { return nil }
-                let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: firstWorkbook)
+            guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path
+                  ?? worksheetPaths.first?.path else { return nil }
+            
+            let worksheet = try xlsx.parseWorksheet(at: horairePath)
+            let sharedStrings = try? xlsx.parseSharedStrings()
+            let rows = worksheet.data?.rows ?? []
+            
+            if let firstRow = rows.first {
+                let cells = firstRow.cells
                 
-                guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path
-                      ?? worksheetPaths.first?.path else { return nil }
-                
-                let worksheet = try xlsx.parseWorksheet(at: horairePath)
-                let sharedStrings = try? xlsx.parseSharedStrings()
-                let rows = worksheet.data?.rows ?? []
-                
-                // Chercher dans la première ligne (row 0) la date
-                if let firstRow = rows.first {
-                    let cells = firstRow.cells
-                    
-                    // Essayer de lire toutes les cellules de la première ligne
-                    for (index, cell) in cells.enumerated() {
-                        if let value = getCellValueOptimized(cells, at: index, sharedStrings: sharedStrings),
-                           !value.isEmpty {
+                for (index, cell) in cells.enumerated() {
+                    if let value = getCellValueOptimized(cells, at: index, sharedStrings: sharedStrings),
+                       !value.isEmpty {
+                        
+                        print("📋 Cellule \(index) de la première ligne: '\(value)'")
+                        
+                        if value.contains("2025") || value.contains("2024") {
+                            print("📅 Titre trouvé dans Excel: '\(value)'")
                             
-                            print("📋 Cellule \(index) de la première ligne: '\(value)'")
-                            
-                            // Vérifier si c'est une date (format "Automne 2025 - 06.11.2025")
-                            if value.contains("2025") || value.contains("2024") {
-                                print("📅 Titre trouvé dans Excel: '\(value)'")
+                            if let dateMatch = value.range(of: "\\d{2}\\.\\d{2}\\.\\d{4}", options: .regularExpression) {
+                                let dateStr = String(value[dateMatch])
+                                print("📅 Date extraite: '\(dateStr)'")
                                 
-                                // Extraire la date du format "Automne 2025 - 06.11.2025" ou "DD.MM.YYYY"
-                                if let dateMatch = value.range(of: "\\d{2}\\.\\d{2}\\.\\d{4}", options: .regularExpression) {
-                                    let dateStr = String(value[dateMatch])
-                                    print("📅 Date extraite: '\(dateStr)'")
-                                    
-                                    // Parser la date (format DD.MM.YYYY)
-                                    let formatter = DateFormatter()
-                                    formatter.dateFormat = "dd.MM.yyyy"
-                                    if let date = formatter.date(from: dateStr) {
-                                        print("✅ Date parsée avec succès: \(date)")
-                                        return date
-                                    }
+                                let formatter = DateFormatter()
+                                formatter.dateFormat = "dd.MM.yyyy"
+                                if let date = formatter.date(from: dateStr) {
+                                    print("✅ Date parsée avec succès: \(date)")
+                                    return date
                                 }
                             }
                         }
                     }
                 }
-                
-                print("⚠️ Aucune date trouvée dans l'en-tête Excel")
-                return nil
-                
-            } catch {
-                print("❌ Erreur lors de l'extraction de la date: \(error)")
-                return nil
             }
+            
+            print("⚠️ Aucune date trouvée dans l'en-tête Excel")
+            return nil
+            
+        } catch {
+            print("❌ Erreur lors de l'extraction de la date: \(error)")
+            return nil
         }
     }
-
+    
+    // Validation de la structure du fichier
+    static func validateFileStructure(_ data: Data, fileType: FileType) throws -> Bool {
+        guard let xlsx = try? XLSXFile(data: data) else {
+            return false
+        }
+        
+        guard let firstWorkbook = try xlsx.parseWorkbooks().first else {
+            return false
+        }
+        
+        let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: firstWorkbook)
+        
+        // Vérifier qu'il y a bien un onglet "Horaire"
+        guard worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") }) != nil else {
+            return false
+        }
+        
+        // Pour les cours, vérifier qu'il y a un "Menu déroulant"
+        if fileType == .cours {
+            guard worksheetPaths.first(where: {
+                $0.name!.lowercased().contains("menu") ||
+                $0.name!.lowercased().contains("déroulant") ||
+                $0.name!.lowercased().contains("deroulant")
+            }) != nil else {
+                return false
+            }
+        }
+        
+        switch fileType {
+        case .cours:
+            return try validateCoursStructure(xlsx, workbook: firstWorkbook)
+        case .examens:
+            return try validateExamensStructure(xlsx, workbook: firstWorkbook)
+        }
+    }
+    
+    private static func validateCoursStructure(_ xlsx: XLSXFile, workbook: Workbook) throws -> Bool {
+        let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: workbook)
+        guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path else {
+            return false
+        }
+        
+        let worksheet = try xlsx.parseWorksheet(at: horairePath)
+        let rows = worksheet.data?.rows ?? []
+        
+        guard rows.count >= 3 else { return false }
+        
+        if let headerRow = rows.first {
+            let cells = headerRow.cells
+            return cells.count >= 11
+        }
+        
+        return false
+    }
+    
+    private static func validateExamensStructure(_ xlsx: XLSXFile, workbook: Workbook) throws -> Bool {
+        let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: workbook)
+        guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path else {
+            return false
+        }
+        
+        let worksheet = try xlsx.parseWorksheet(at: horairePath)
+        let rows = worksheet.data?.rows ?? []
+        
+        guard rows.count >= 4 else { return false }
+        
+        if let firstDataRow = rows.dropFirst(3).first {
+            return firstDataRow.cells.count >= 12
+        }
+        
+        return false
+    }
+}

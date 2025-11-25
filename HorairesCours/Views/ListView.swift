@@ -34,8 +34,6 @@ struct ListView: View {
         return dates
     }
     
-    // Dans ListView.swift, modifie la propriété weekInfo et dateRange
-
     var dateRange: String {
         let calendar = Calendar.current
         guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: viewModel.selectedDate) else {
@@ -53,8 +51,6 @@ struct ListView: View {
         return "\(start) - \(endFormatted)"
     }
     
-    // Views/ListView.swift
-
     var body: some View {
         VStack(spacing: 0) {
             // En-tête avec les dates de la semaine
@@ -75,7 +71,7 @@ struct ListView: View {
                         .foregroundColor(.gray)
                     
                     Text("Aucun cours cette semaine")
-                        .foregroundColor(Color(white: 0.7))
+                        .foregroundColor(.gray)
                     
                     Button("Choisir une volée") {
                         viewModel.changeCursus()
@@ -89,7 +85,8 @@ struct ListView: View {
                         ForEach(weekDays, id: \.self) { date in
                             DaySection(
                                 date: date,
-                                schedules: viewModel.groupedByDate[Calendar.current.startOfDay(for: date)] ?? []
+                                schedules: viewModel.groupedByDate[Calendar.current.startOfDay(for: date)] ?? [],
+                                isExamen: viewModel.currentFileType == .examens
                             )
                         }
                     }
@@ -204,6 +201,7 @@ struct WeekNavigationFooter: View {
 struct DaySection: View {
     let date: Date
     let schedules: [CourseSchedule]
+    let isExamen: Bool
     
     // Trier les cours par heure de début
     var sortedSchedules: [CourseSchedule] {
@@ -216,7 +214,17 @@ struct DaySection: View {
     
     // Extraire l'heure de début (ex: "09:00 - 13:00" -> 540)
     func extractStartTime(from heureString: String) -> Int {
-        let components = heureString.components(separatedBy: " - ")
+        // Gérer le format spécial des examens "Arrivée: 13:30 | Examen: 14:00 - 17:00"
+        var timeString = heureString
+        
+        if heureString.contains("Examen:") {
+            // Extraire l'heure après "Examen:"
+            if let examenRange = heureString.range(of: "Examen:") {
+                timeString = String(heureString[examenRange.upperBound...])
+            }
+        }
+        
+        let components = timeString.components(separatedBy: " - ")
         guard let startTime = components.first?.trimmingCharacters(in: .whitespaces) else {
             return 0
         }
@@ -280,9 +288,13 @@ struct DaySection: View {
                 
                 Spacer()
                 
-                // Badge nombre de cours
+                // Badge nombre de cours/examens
                 if !schedules.isEmpty {
-                    Text("\(schedules.count) cours")
+                    let label = schedules.count == 1
+                        ? (isExamen ? "examen" : "cours")
+                        : (isExamen ? "examens" : "cours")
+                    
+                    Text("\(schedules.count) \(label)")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.blue)
                         .padding(.horizontal, 10)
@@ -347,18 +359,18 @@ struct CourseCell: View {
                 HStack(spacing: 4) {
                     Image(systemName: "clock")
                         .font(.system(size: 12))
-                        .foregroundColor(Color(white: 0.7))
+                        .foregroundColor(.gray)
                     
                     Text(schedule.heure)
                         .font(.system(size: 13))
-                        .foregroundColor(Color(white: 0.7))
+                        .foregroundColor(.gray)
                     
                     if !schedule.duration.isEmpty {
                         Text("•")
-                            .foregroundColor(Color(white: 0.7))
+                            .foregroundColor(.gray)
                         Text(schedule.duration)
                             .font(.system(size: 13))
-                            .foregroundColor(Color(white: 0.7))
+                            .foregroundColor(.gray)
                     }
                 }
                 
@@ -367,11 +379,11 @@ struct CourseCell: View {
                     HStack(spacing: 4) {
                         Image(systemName: "mappin.circle")
                             .font(.system(size: 12))
-                            .foregroundColor(Color(white: 0.7))
+                            .foregroundColor(.gray)
                         
                         Text(schedule.salle)
                             .font(.system(size: 13))
-                            .foregroundColor(Color(white: 0.7))
+                            .foregroundColor(.gray)
                     }
                 }
             }

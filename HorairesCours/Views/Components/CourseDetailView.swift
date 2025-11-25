@@ -48,14 +48,9 @@ struct CourseDetailView: View {
                 )
                 .cornerRadius(16)
                 
-                // Informations (sans durée)
+                // Informations
                 VStack(spacing: 16) {
                     DetailRow(icon: "clock.fill", title: "Horaire", value: schedule.heure)
-                    
-                    // ❌ SUPPRIMÉ : Durée
-                    // if !schedule.duration.isEmpty {
-                    //     DetailRow(icon: "hourglass", title: "Durée", value: schedule.duration)
-                    // }
                     
                     if !schedule.nombrePeriode.isEmpty {
                         DetailRow(icon: "number.circle.fill", title: "Nombre de périodes", value: schedule.nombrePeriode)
@@ -68,6 +63,10 @@ struct CourseDetailView: View {
                     if !schedule.enseignant.isEmpty {
                         DetailRow(icon: "person.fill", title: "Enseignant", value: schedule.enseignant)
                     }
+                    
+                    // ✅ NOUVEAU : Afficher l'option si elle est dans le contenu
+                    // L'option est déjà incluse dans contenuCours, donc elle s'affichera automatiquement
+                    // dans l'en-tête avec le contenu du cours
                 }
                 .padding()
                 .background(Color.white)

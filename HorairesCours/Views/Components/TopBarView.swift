@@ -7,22 +7,29 @@ struct TopBarView: View {
     
     var body: some View {
         HStack(spacing: 16) {
-            // Bouton menu
+            // Bouton menu - retour à HomeView
             Button(action: {
-                viewModel.changeCursus()
+                viewModel.showHomeView = true
             }) {
                 Image(systemName: "line.3.horizontal")
                     .foregroundColor(.white)
                     .font(.system(size: 20))
             }
             
-            // Volée sélectionnée
+            // Volée sélectionnée + Type de source
             if let volee = viewModel.selectedVolee {
-                Text(volee)
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.8))
-                    .lineLimit(1)
-                    .frame(maxWidth: 100)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(volee)
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.8))
+                        .lineLimit(1)
+                    
+                    Text(viewModel.currentDataSource.type.rawValue)
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.6))
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: 120)
             }
             
             Spacer()
@@ -43,7 +50,6 @@ struct TopBarView: View {
             }
             
             Spacer()
-            
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
