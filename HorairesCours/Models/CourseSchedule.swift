@@ -13,8 +13,8 @@ final class CourseSchedule {
     var enseignant: String
     var duration: String
     var colorRaw: String
-    var contenuCours: String  // ✅ NOUVEAU
-    var nombrePeriode: String // ✅ NOUVEAU
+    var contenuCours: String
+    var nombrePeriode: String
     
     var color: ScheduleColor {
         get { ScheduleColor(rawValue: colorRaw) ?? .blue }

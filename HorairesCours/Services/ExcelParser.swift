@@ -309,9 +309,7 @@ class ExcelParser {
                 }
             } else {
                 if !heureDebut.isEmpty && !heureFin.isEmpty {
-                    let debutFormatted = formatSingleHeureUniform(heureDebut)
-                    let finFormatted = formatSingleHeureUniform(heureFin)
-                    heureComplete = "\(debutFormatted) - \(finFormatted)"
+                    heureComplete = formatHeure(debut: heureDebut, fin: heureFin)
                 } else {
                     heureComplete = "Horaire non spécifié"
                 }
@@ -327,7 +325,7 @@ class ExcelParser {
                 }
                 contenuExamen += "🔒 Anonymisation: \(anonymisation)"
             }
-            if !option.isEmpty && option != "Toutes orientations" {
+            if !option.isEmpty {
                 if !contenuExamen.isEmpty {
                     contenuExamen += "\n"
                 }
@@ -466,11 +464,41 @@ class ExcelParser {
         guard index < cells.count else { return nil }
         let cell = cells[index]
         
+        // ✅ Essayer la méthode standard d'abord
         if let sharedStrings = sharedStrings,
            let stringValue = cell.stringValue(sharedStrings) {
             return stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         
+        // ✅ AJOUT : Si stringValue est nil, récupérer manuellement depuis richText
+        if let sharedStrings = sharedStrings,
+           let type = cell.type,
+           type == .sharedString,
+           let valueString = cell.value,
+           let sharedStringIndex = Int(valueString),
+           sharedStringIndex < sharedStrings.items.count {
+            
+            let sharedString = sharedStrings.items[sharedStringIndex]
+            
+            // Si le texte est dans richText (tableau de fragments)
+            if !sharedString.richText.isEmpty {
+                let fullText = sharedString.richText
+                    .compactMap { $0.text }
+                    .joined()
+                
+                if !fullText.isEmpty {
+                    print("✅ RichText récupéré pour l'index \(sharedStringIndex): '\(fullText)'")
+                    return fullText.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            }
+            
+            // Sinon, utiliser le texte simple s'il existe
+            if let simpleText = sharedString.text {
+                return simpleText.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        
+        // Fallback sur la valeur brute
         if let value = cell.value {
             return value.trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -551,22 +579,9 @@ class ExcelParser {
     }
     
     private static func formatHeure(debut: String, fin: String) -> String {
-        let debutFormatted = formatSingleHeure(debut)
-        let finFormatted = formatSingleHeure(fin)
+        let debutFormatted = formatSingleHeureUniform(debut)
+        let finFormatted = formatSingleHeureUniform(fin)
         return "\(debutFormatted) - \(finFormatted)"
-    }
-    
-    private static func formatSingleHeure(_ heure: String) -> String {
-        let cleaned = heure.replacingOccurrences(of: ".", with: ":")
-        let components = cleaned.split(separator: ":")
-        
-        guard components.count == 2,
-              let hour = Int(components[0]),
-              let minute = Int(components[1]) else {
-            return heure
-        }
-        
-        return String(format: "%02d:%02d", hour, minute)
     }
     
     private static func formatSingleHeureUniform(_ heure: String) -> String {
