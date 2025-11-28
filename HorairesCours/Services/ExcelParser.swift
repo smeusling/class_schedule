@@ -635,33 +635,124 @@ class ExcelParser {
     }
     
     private static func extractDuration(debut: String, fin: String) -> String {
-        let debutComponents = debut.split(separator: ".")
-        let finComponents = fin.split(separator: ".")
+        // ✅ AJOUT : Log pour debug
+        print("🕐 extractDuration appelé - début: '\(debut)', fin: '\(fin)'")
         
-        guard debutComponents.count >= 1, finComponents.count >= 1,
-              let startHour = Int(debutComponents[0]),
-              let endHour = Int(finComponents[0]) else {
+        // Nettoyer les espaces
+        let cleanDebut = debut.trimmingCharacters(in: .whitespaces)
+        let cleanFin = fin.trimmingCharacters(in: .whitespaces)
+        
+        // Si l'une des valeurs est vide, retourner vide
+        if cleanDebut.isEmpty || cleanFin.isEmpty {
+            print("⚠️ Début ou fin vide")
             return ""
         }
         
-        let startMinute = debutComponents.count > 1 ? Int(debutComponents[1]) ?? 0 : 0
-        let endMinute = finComponents.count > 1 ? Int(finComponents[1]) ?? 0 : 0
+        // Parser l'heure de début
+        var startMinutes = 0
+        if cleanDebut.contains(":") {
+            let parts = cleanDebut.components(separatedBy: ":")
+            if parts.count == 2,
+               let hours = Int(parts[0]),
+               let minutes = Int(parts[1]) {
+                startMinutes = hours * 60 + minutes
+                print("✅ Début parsé (HH:MM): \(hours)h\(minutes) = \(startMinutes) minutes")
+            }
+        } else if cleanDebut.contains(".") {
+            // ✅ CORRECTION : Gérer les floats avec précision
+            if let doubleValue = Double(cleanDebut) {
+                let hours = Int(doubleValue)
+                let decimalPart = doubleValue - Double(hours)
+                let decimalString = String(format: "%.1f", decimalPart)
+                
+                // Extraire le chiffre après le point (ex: 0.3 -> 3 -> 30 minutes)
+                if let dotIndex = decimalString.firstIndex(of: "."),
+                   decimalString.count > dotIndex.utf16Offset(in: decimalString) + 1 {
+                    let minuteChar = decimalString[decimalString.index(after: dotIndex)]
+                    if let minuteDigit = Int(String(minuteChar)) {
+                        let minutes = minuteDigit * 10  // .3 devient 30
+                        startMinutes = hours * 60 + minutes
+                        print("✅ Début parsé (HH.MM): \(hours)h\(minutes) = \(startMinutes) minutes")
+                    }
+                } else {
+                    startMinutes = hours * 60
+                    print("✅ Début parsé (HH): \(hours)h = \(startMinutes) minutes")
+                }
+            }
+        } else if let hours = Int(cleanDebut) {
+            startMinutes = hours * 60
+            print("✅ Début parsé (HH): \(hours)h = \(startMinutes) minutes")
+        }
         
-        var totalMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute)
+        // Parser l'heure de fin
+        var endMinutes = 0
+        if cleanFin.contains(":") {
+            let parts = cleanFin.components(separatedBy: ":")
+            if parts.count == 2,
+               let hours = Int(parts[0]),
+               let minutes = Int(parts[1]) {
+                endMinutes = hours * 60 + minutes
+                print("✅ Fin parsée (HH:MM): \(hours)h\(minutes) = \(endMinutes) minutes")
+            }
+        } else if cleanFin.contains(".") {
+            // ✅ CORRECTION : Gérer les floats avec précision
+            if let doubleValue = Double(cleanFin) {
+                let hours = Int(doubleValue)
+                let decimalPart = doubleValue - Double(hours)
+                let decimalString = String(format: "%.1f", decimalPart)
+                
+                // Extraire le chiffre après le point (ex: 0.3 -> 3 -> 30 minutes)
+                if let dotIndex = decimalString.firstIndex(of: "."),
+                   decimalString.count > dotIndex.utf16Offset(in: decimalString) + 1 {
+                    let minuteChar = decimalString[decimalString.index(after: dotIndex)]
+                    if let minuteDigit = Int(String(minuteChar)) {
+                        let minutes = minuteDigit * 10  // .3 devient 30
+                        endMinutes = hours * 60 + minutes
+                        print("✅ Fin parsée (HH.MM): \(hours)h\(minutes) = \(endMinutes) minutes")
+                    }
+                } else {
+                    endMinutes = hours * 60
+                    print("✅ Fin parsée (HH): \(hours)h = \(endMinutes) minutes")
+                }
+            }
+        } else if let hours = Int(cleanFin) {
+            endMinutes = hours * 60
+            print("✅ Fin parsée (HH): \(hours)h = \(endMinutes) minutes")
+        }
         
+        // Si on n'a pas réussi à parser, retourner vide
+        if startMinutes == 0 && endMinutes == 0 {
+            print("⚠️ Impossible de parser les heures")
+            return ""
+        }
+        
+        // Calculer la différence
+        var totalMinutes = endMinutes - startMinutes
+        
+        // Gérer le cas où on passe minuit
         if totalMinutes < 0 {
             totalMinutes += 24 * 60
+        }
+        
+        // Vérification de sécurité : si la durée est absurde (> 24h), retourner vide
+        if totalMinutes > 24 * 60 || totalMinutes < 0 {
+            print("⚠️ Durée invalide calculée: \(totalMinutes) minutes")
+            return ""
         }
         
         let hours = totalMinutes / 60
         let minutes = totalMinutes % 60
         
+        print("✅ Durée calculée: \(hours)h\(minutes)min (total: \(totalMinutes) minutes)")
+        
         if hours > 0 && minutes > 0 {
             return "\(hours)h\(minutes)min"
         } else if hours > 0 {
             return "\(hours)h"
-        } else {
+        } else if minutes > 0 {
             return "\(minutes)min"
+        } else {
+            return ""
         }
     }
 
