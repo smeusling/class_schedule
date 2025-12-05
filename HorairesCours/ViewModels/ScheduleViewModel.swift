@@ -126,16 +126,30 @@ class ScheduleViewModel: ObservableObject {
         }
     }
     
-    // ✅ NOUVEAU : Vérifier si le fichier a été mis à jour
+    // ✅ MODIFIÉ : Vérifier si le fichier a été mis à jour
     func checkForUpdates() async {
         guard let storageManager = storageManager else { return }
         guard selectedVolee != nil else { return }
         
         print("🔍 Vérification des mises à jour...")
         
+        // ✅ NOUVEAU : Forcer la recherche du fichier le plus récent
+        DataSourceManager.clearCache()
+        
+        let mostRecentURL: String?
+        switch currentFileType {
+        case .examens:
+            mostRecentURL = await DataSourceManager.getMostRecentExamenURL()
+        case .cours:
+            mostRecentURL = await DataSourceManager.getMostRecentCoursURL()
+        }
+        
+        guard let urlString = mostRecentURL, let url = URL(string: urlString) else {
+            print("⚠️ Impossible de trouver le fichier le plus récent")
+            return
+        }
+        
         do {
-            guard let url = URL(string: currentDataSource.url) else { return }
-            
             var request = URLRequest(url: url)
             request.httpMethod = "HEAD"
             request.timeoutInterval = 10
@@ -187,14 +201,28 @@ class ScheduleViewModel: ObservableObject {
         }
     }
     
+    // ✅ MODIFIÉ : Charger la liste des volées
     func loadCursusList() async {
         isLoading = true
-        print("📄 Chargement de la liste des volées...")
+        print("🔄 Chargement de la liste des volées...")
         
         do {
-            guard let url = URL(string: currentDataSource.url) else {
-                throw URLError(.badURL)
+            // ✅ NOUVEAU : Utiliser le fichier le plus récent
+            let mostRecentURL: String?
+            switch currentFileType {
+            case .examens:
+                mostRecentURL = await DataSourceManager.getMostRecentExamenURL()
+            case .cours:
+                mostRecentURL = await DataSourceManager.getMostRecentCoursURL()
             }
+            
+            guard let urlString = mostRecentURL, let url = URL(string: urlString) else {
+                throw NSError(domain: "DataSourceError", code: -1, userInfo: [
+                    NSLocalizedDescriptionKey: "Impossible de trouver le fichier sur le serveur"
+                ])
+            }
+            
+            print("📥 Chargement des volées depuis: \(url.lastPathComponent)")
             
             let (data, _) = try await URLSession.shared.data(from: url)
             let volees = try ExcelParser.extractVolees(data)
@@ -210,6 +238,7 @@ class ScheduleViewModel: ObservableObject {
         isLoading = false
     }
     
+    // ✅ MODIFIÉ : Charger les données
     func loadData(forceRefresh: Bool = false) async {
         guard let storageManager = storageManager else {
             print("❌ StorageManager non initialisé")
@@ -228,7 +257,7 @@ class ScheduleViewModel: ObservableObject {
             return
         }
         
-        print("📄 LoadData - Volée: \(selectedVolee), Modalités: \(selectedModalites.map { $0.rawValue }), Type: \(currentFileType.rawValue), ForceRefresh: \(forceRefresh)")
+        print("🔄 LoadData - Volée: \(selectedVolee), Modalités: \(selectedModalites.map { $0.rawValue }), Type: \(currentFileType.rawValue), ForceRefresh: \(forceRefresh)")
         
         if !forceRefresh && storageManager.hasData() {
             print("💾 Chargement depuis le cache")
@@ -241,11 +270,22 @@ class ScheduleViewModel: ObservableObject {
         isOfflineMode = false
         
         do {
-            guard let url = URL(string: currentDataSource.url) else {
-                throw URLError(.badURL)
+            // ✅ NOUVEAU : Obtenir l'URL du fichier le plus récent
+            let mostRecentURL: String?
+            switch currentFileType {
+            case .examens:
+                mostRecentURL = await DataSourceManager.getMostRecentExamenURL()
+            case .cours:
+                mostRecentURL = await DataSourceManager.getMostRecentCoursURL()
             }
             
-            print("🌐 Téléchargement du fichier Excel...")
+            guard let urlString = mostRecentURL, let url = URL(string: urlString) else {
+                throw NSError(domain: "DataSourceError", code: -1, userInfo: [
+                    NSLocalizedDescriptionKey: "Impossible de trouver le fichier sur le serveur. Le fichier a peut-être été déplacé ou renommé."
+                ])
+            }
+            
+            print("🌐 Téléchargement depuis: \(url.lastPathComponent)")
             
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
@@ -287,7 +327,6 @@ class ScheduleViewModel: ObservableObject {
             print("✅ Fichier téléchargé, parsing en cours...")
             let modalitesArray = Array(selectedModalites)
             
-            // ✅ MODIFICATION : Passer le fileType au parser
             let parsed = try ExcelParser.parse(data, selectedVolee: selectedVolee, modalites: modalitesArray, fileType: currentFileType)
             
             print("✅ Parsing terminé: \(parsed.count) éléments trouvés")
@@ -304,8 +343,8 @@ class ScheduleViewModel: ObservableObject {
             print("❌ Erreur réseau: \(error)")
             await loadFromCache()
         } catch {
-            errorMessage = "Erreur de parsing: \(error.localizedDescription)"
-            print("❌ Erreur parsing: \(error)")
+            errorMessage = "Erreur: \(error.localizedDescription)"
+            print("❌ Erreur: \(error)")
             await loadFromCache()
         }
         
