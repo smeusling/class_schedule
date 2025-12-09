@@ -122,6 +122,62 @@ class ExcelParser {
         }
     }
     
+    // MARK: - Fonctions utilitaires pour trouver les colonnes par nom
+    
+    private static func findColumnIndex(in rows: [Row], sharedStrings: SharedStrings?, columnName: String) -> Int? {
+        // Chercher dans les 3 premières lignes (souvent l'en-tête est en ligne 1 ou 2)
+        for row in rows.prefix(3) {
+            let cells = row.cells
+            
+            for (index, _) in cells.enumerated() {
+                if let value = getCellValueOptimized(cells, at: index, sharedStrings: sharedStrings) {
+                    let cleanValue = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    let cleanSearch = columnName.lowercased()
+                    
+                    if cleanValue == cleanSearch || cleanValue.contains(cleanSearch) {
+                        print("✅ Colonne '\(columnName)' trouvée à l'index \(index) (valeur: '\(value)')")
+                        return index
+                    }
+                }
+            }
+        }
+        
+        print("⚠️ Colonne '\(columnName)' non trouvée")
+        return nil
+    }
+    
+    private static func buildColumnMap(rows: [Row], sharedStrings: SharedStrings?, fileType: FileType) -> [String: Int] {
+        var columnMap: [String: Int] = [:]
+        
+        let columnsToFind: [String]
+        if fileType == .cours {
+            columnsToFind = ["date", "heure début", "heure fin", "nombre période", "cours", "contenu", "option", "enseignant", "salle"]
+        } else {
+            columnsToFind = ["date", "arrivée", "heure début", "heure fin", "cours", "modalité", "anonymisation", "volée", "option", "enseignant", "salle"]
+        }
+        
+        print("🔍 Recherche des colonnes pour type: \(fileType.rawValue)")
+        
+        for columnName in columnsToFind {
+            if let index = findColumnIndex(in: rows, sharedStrings: sharedStrings, columnName: columnName) {
+                columnMap[columnName] = index
+            }
+        }
+        
+        // ✅ SPÉCIAL : Pour la colonne Cursus qui n'a pas de titre dans le fichier cours
+        if fileType == .cours {
+            // La colonne cursus est juste avant "Option" (qui a un titre)
+            if let optionIndex = columnMap["option"] {
+                let cursusIndex = optionIndex - 1
+                columnMap["cursus"] = cursusIndex
+                print("✅ Colonne 'cursus' déduite à l'index \(cursusIndex) (juste avant Option)")
+            }
+        }
+        
+        print("📋 Mapping des colonnes: \(columnMap)")
+        return columnMap
+    }
+    
     // Parser pour les horaires de cours
     private static func parseCoursSchedule(_ data: Data, selectedVolee: String?, modalites: [Modalite]) throws -> [CourseSchedule] {
         guard let xlsx = try? XLSXFile(data: data) else {
@@ -142,7 +198,7 @@ class ExcelParser {
         let worksheet = try xlsx.parseWorksheet(at: horairePath)
         let sharedStrings = try? xlsx.parseSharedStrings()
         
-        scheduleItems = parseCoursWorksheet(worksheet, sharedStrings: sharedStrings, colors: colors, colorIndex: &colorIndex, selectedVolee: selectedVolee, modalites: modalites)
+        scheduleItems = parseCoursWorksheetDynamic(worksheet, sharedStrings: sharedStrings, colors: colors, colorIndex: &colorIndex, selectedVolee: selectedVolee, modalites: modalites)
         
         return scheduleItems.sorted { $0.date < $1.date }
     }
@@ -167,51 +223,70 @@ class ExcelParser {
         let worksheet = try xlsx.parseWorksheet(at: horairePath)
         let sharedStrings = try? xlsx.parseSharedStrings()
         
-        scheduleItems = parseExamensWorksheet(worksheet, sharedStrings: sharedStrings, colors: colors, colorIndex: &colorIndex, selectedVolee: selectedVolee, modalites: modalites)
+        scheduleItems = parseExamensWorksheetDynamic(worksheet, sharedStrings: sharedStrings, colors: colors, colorIndex: &colorIndex, selectedVolee: selectedVolee, modalites: modalites)
         
         return scheduleItems.sorted { $0.date < $1.date }
     }
 
-    private static func parseCoursWorksheet(_ worksheet: Worksheet, sharedStrings: SharedStrings?, colors: [ScheduleColor], colorIndex: inout Int, selectedVolee: String?, modalites: [Modalite]) -> [CourseSchedule] {
+    private static func parseCoursWorksheetDynamic(_ worksheet: Worksheet, sharedStrings: SharedStrings?, colors: [ScheduleColor], colorIndex: inout Int, selectedVolee: String?, modalites: [Modalite]) -> [CourseSchedule] {
         var scheduleItems: [CourseSchedule] = []
         let rows = worksheet.data?.rows ?? []
         
         print("📊 Parsing \(rows.count) lignes...")
+        
+        // ✅ NOUVEAU : Construire le mapping des colonnes
+        let columnMap = buildColumnMap(rows: rows, sharedStrings: sharedStrings, fileType: .cours)
+        
+        // Vérifier qu'on a les colonnes essentielles
+        guard let dateCol = columnMap["date"],
+              let coursCol = columnMap["cours"] else {
+            print("❌ Colonnes essentielles manquantes (date ou cours)")
+            return []
+        }
+        
+        // Colonnes optionnelles avec fallback
+        let heureDebutCol = columnMap["heure début"] ?? columnMap["heure debut"] ?? 2
+        let heureFinCol = columnMap["heure fin"] ?? 3
+        let nombrePeriodeCol = columnMap["nombre période"] ?? columnMap["nombre periode"] ?? 4
+        let contenuCol = columnMap["contenu"] ?? columnMap["contenu du cours"] ?? 6
+        let cursusCol = columnMap["cursus"] ?? 7
+        let enseignantCol = columnMap["enseignant"] ?? 9
+        let salleCol = columnMap["salle"] ?? 10
+        
+        print("📍 Colonnes utilisées: date=\(dateCol), cours=\(coursCol), cursus=\(cursusCol), salle=\(salleCol), enseignant=\(enseignantCol)")
         
         for (index, row) in rows.enumerated() {
             if index < 2 { continue }
             
             let cells = row.cells
             
-            let dateStr = getDateCellValue(cells, at: 1, sharedStrings: sharedStrings) ?? ""
-            let heureDebut = getCellValueOptimized(cells, at: 2, sharedStrings: sharedStrings) ?? ""
-            let heureFin = getCellValueOptimized(cells, at: 3, sharedStrings: sharedStrings) ?? ""
-            let nombrePeriode = getCellValueOptimized(cells, at: 4, sharedStrings: sharedStrings) ?? ""
-            let cours = getCellValueOptimized(cells, at: 5, sharedStrings: sharedStrings) ?? ""
-            let contenuCours = getCellValueOptimized(cells, at: 6, sharedStrings: sharedStrings) ?? ""
-            let cursus = getCellValueOptimized(cells, at: 7, sharedStrings: sharedStrings) ?? ""
-            let enseignant = getCellValueOptimized(cells, at: 9, sharedStrings: sharedStrings) ?? ""
-            let salle = getCellValueOptimized(cells, at: 10, sharedStrings: sharedStrings) ?? ""
+            let dateStr = getDateCellValue(cells, at: dateCol, sharedStrings: sharedStrings) ?? ""
+            let heureDebut = getCellValueOptimized(cells, at: heureDebutCol, sharedStrings: sharedStrings) ?? ""
+            let heureFin = getCellValueOptimized(cells, at: heureFinCol, sharedStrings: sharedStrings) ?? ""
+            let nombrePeriode = getCellValueOptimized(cells, at: nombrePeriodeCol, sharedStrings: sharedStrings) ?? ""
+            let cours = getCellValueOptimized(cells, at: coursCol, sharedStrings: sharedStrings) ?? ""
+            let contenuCours = getCellValueOptimized(cells, at: contenuCol, sharedStrings: sharedStrings) ?? ""
+            let cursus = getCellValueOptimized(cells, at: cursusCol, sharedStrings: sharedStrings) ?? ""
+            let enseignant = getCellValueOptimized(cells, at: enseignantCol, sharedStrings: sharedStrings) ?? ""
+            
+            // ✅ Nettoyer les erreurs Excel
+            var salle = getCellValueOptimized(cells, at: salleCol, sharedStrings: sharedStrings) ?? ""
+            
+            if salle == "#REF!" || salle == "#N/A" || salle == "#VALUE!" || salle == "#DIV/0!" || salle == "#NAME?" || salle == "0" {
+                salle = ""
+            }
             
             // Filtrer par volée ET modalités
             if let selectedVolee = selectedVolee {
                 if !matchesVoleeAndModalites(cursus: cursus, selectedVolee: selectedVolee, modalites: modalites) {
-                    print("❌ Ligne \(index): Cours '\(cours)' REJETÉ - Cursus: '\(cursus)' ne correspond pas à '\(selectedVolee)' avec modalités: \(modalites.map { $0.rawValue })")
                     continue
-                } else {
-                    print("✅ Ligne \(index): Cours '\(cours)' ACCEPTÉ - Cursus: '\(cursus)'")
                 }
             }
             
             guard !cours.isEmpty else { continue }
             guard let date = parseDate(dateStr) else {
-                print("⚠️ Ligne \(index): Date invalide '\(dateStr)'")
                 continue
             }
-            
-            let formatter = DateFormatter()
-            formatter.dateFormat = "dd/MM/yyyy"
-            print("✅ Ligne \(index): Date Excel '\(dateStr)' -> Date parsée: \(formatter.string(from: date)) | Cours: '\(cours)'")
             
             let heureComplete = formatHeure(debut: heureDebut, fin: heureFin)
             
@@ -234,75 +309,85 @@ class ExcelParser {
         return scheduleItems
     }
     
-    private static func parseExamensWorksheet(_ worksheet: Worksheet, sharedStrings: SharedStrings?, colors: [ScheduleColor], colorIndex: inout Int, selectedVolee: String?, modalites: [Modalite]) -> [CourseSchedule] {
+    private static func parseExamensWorksheetDynamic(_ worksheet: Worksheet, sharedStrings: SharedStrings?, colors: [ScheduleColor], colorIndex: inout Int, selectedVolee: String?, modalites: [Modalite]) -> [CourseSchedule] {
         var scheduleItems: [CourseSchedule] = []
         let rows = worksheet.data?.rows ?? []
         
         print("📊 Parsing examens - \(rows.count) lignes...")
         
-        // DEUXIÈME PASSE : Parser les examens
+        // ✅ NOUVEAU : Construire le mapping des colonnes
+        let columnMap = buildColumnMap(rows: rows, sharedStrings: sharedStrings, fileType: .examens)
+        
+        // Vérifier qu'on a les colonnes essentielles
+        guard let dateCol = columnMap["date"],
+              let coursCol = columnMap["cours"] else {
+            print("❌ Colonnes essentielles manquantes (date ou cours)")
+            return []
+        }
+        
+        // Pour volée, essayer plusieurs variantes
+        let voleeCol = columnMap["volée"] ?? columnMap["volee"] ?? 8
+        
+        // Colonnes optionnelles avec fallback
+        let arriveeCol = columnMap["arrivée"] ?? columnMap["arrivee"] ?? columnMap["arrivée pour contrôle id"] ?? 2
+        let heureDebutCol = columnMap["heure début"] ?? columnMap["heure debut"] ?? 3
+        let heureFinCol = columnMap["heure fin"] ?? 4
+        let modaliteCol = columnMap["modalité"] ?? columnMap["modalite"] ?? 6
+        let anonymisationCol = columnMap["anonymisation"] ?? 7
+        let optionCol = columnMap["option"] ?? 9
+        let enseignantCol = columnMap["enseignant"] ?? 10
+        let salleCol = columnMap["salle"] ?? 11
+        
+        print("📍 Colonnes utilisées: date=\(dateCol), cours=\(coursCol), volée=\(voleeCol), salle=\(salleCol)")
+        
         for (index, row) in rows.enumerated() {
             if index < 3 { continue }
             
             let cells = row.cells
             
-            let jour = getCellValueOptimized(cells, at: 0, sharedStrings: sharedStrings) ?? ""
-            let dateStr = getDateCellValue(cells, at: 1, sharedStrings: sharedStrings) ?? ""
-            let arriveeControle = getCellValueOptimized(cells, at: 2, sharedStrings: sharedStrings) ?? ""
-            let heureDebut = getCellValueOptimized(cells, at: 3, sharedStrings: sharedStrings) ?? ""
-            let heureFin = getCellValueOptimized(cells, at: 4, sharedStrings: sharedStrings) ?? ""
-            let coursRaw = getCellValueOptimized(cells, at: 5, sharedStrings: sharedStrings) ?? ""
-            let modalite = getCellValueOptimized(cells, at: 6, sharedStrings: sharedStrings) ?? ""
-            let anonymisation = getCellValueOptimized(cells, at: 7, sharedStrings: sharedStrings) ?? ""
-            let volee = getCellValueOptimized(cells, at: 8, sharedStrings: sharedStrings) ?? ""
-            let option = getCellValueOptimized(cells, at: 9, sharedStrings: sharedStrings) ?? ""
-            let enseignant = getCellValueOptimized(cells, at: 10, sharedStrings: sharedStrings) ?? ""
-            let salle = getCellValueOptimized(cells, at: 11, sharedStrings: sharedStrings) ?? ""
+            let dateStr = getDateCellValue(cells, at: dateCol, sharedStrings: sharedStrings) ?? ""
+            let arriveeControle = getCellValueOptimized(cells, at: arriveeCol, sharedStrings: sharedStrings) ?? ""
+            let heureDebut = getCellValueOptimized(cells, at: heureDebutCol, sharedStrings: sharedStrings) ?? ""
+            let heureFin = getCellValueOptimized(cells, at: heureFinCol, sharedStrings: sharedStrings) ?? ""
+            let coursRaw = getCellValueOptimized(cells, at: coursCol, sharedStrings: sharedStrings) ?? ""
+            let modalite = getCellValueOptimized(cells, at: modaliteCol, sharedStrings: sharedStrings) ?? ""
+            let anonymisation = getCellValueOptimized(cells, at: anonymisationCol, sharedStrings: sharedStrings) ?? ""
+            let volee = getCellValueOptimized(cells, at: voleeCol, sharedStrings: sharedStrings) ?? ""
+            let option = getCellValueOptimized(cells, at: optionCol, sharedStrings: sharedStrings) ?? ""
+            let enseignant = getCellValueOptimized(cells, at: enseignantCol, sharedStrings: sharedStrings) ?? ""
             
-            // Filtrer par volée AVANT de vérifier le cours
+            // ✅ Nettoyer les erreurs Excel pour la salle
+            var salle = getCellValueOptimized(cells, at: salleCol, sharedStrings: sharedStrings) ?? ""
+            
+            if salle == "#REF!" || salle == "#N/A" || salle == "#VALUE!" || salle == "#DIV/0!" || salle == "#NAME?" || salle == "0" {
+                salle = ""
+            }
+            
+            // Filtrer par volée
             guard let selectedVolee = selectedVolee else { continue }
             
             if !matchesVoleeForExamens(volee: volee, modalite: modalite, option: option, selectedVolee: selectedVolee, selectedModalites: modalites) {
                 continue
             }
             
-            // ✅ VÉRIFICATION : Si le cours est juste un nombre, c'est une erreur de parsing
             var cours = coursRaw.trimmingCharacters(in: .whitespacesAndNewlines)
             
             if cours.isEmpty || Int(cours) != nil {
                 cours = "⚠️ Erreur de lecture du fichier Excel"
-                print("⚠️ Ligne \(index): Cours illisible (valeur: '\(coursRaw)'), utilisateur sera notifié")
             }
             
-            print("✅ Ligne \(index): Examen '\(cours)' ACCEPTÉ - Volée: '\(volee)'")
-            
-            print("✅ Ligne \(index): Examen '\(cours)' ACCEPTÉ - Volée: '\(volee)'")
-
-            // Parser la date
             guard let date = parseDate(dateStr) else {
-                print("⚠️ Ligne \(index): Date invalide '\(dateStr)'")
                 continue
             }
-
-            let formatter = DateFormatter()
-            formatter.dateFormat = "dd/MM/yyyy"
-            print("✅ Ligne \(index): Date Excel '\(dateStr)' -> Date parsée: \(formatter.string(from: date)) | Examen: '\(cours)'")
-
-            // 🔍 AJOUTEZ CES LOGS ICI ⬇️
-            print("🔍 DEBUG Ligne \(index): arriveeControle brut = '\(arriveeControle)'")
-            print("🔍 DEBUG Ligne \(index): heureDebut brut = '\(heureDebut)'")
-            print("🔍 DEBUG Ligne \(index): heureFin brut = '\(heureFin)'")
-
+            
             // Construire les informations d'horaire
             let heureComplete: String
             if !arriveeControle.isEmpty && arriveeControle != "Ø" {
                 let arriveeFormatted = formatSingleHeureUniform(arriveeControle)
-                print("🔍 DEBUG Ligne \(index): arriveeControle formaté = '\(arriveeFormatted)'")
                 
                 if !heureDebut.isEmpty && !heureFin.isEmpty {
                     let debutFormatted = formatSingleHeureUniform(heureDebut)
                     let finFormatted = formatSingleHeureUniform(heureFin)
-                    print("🔍 DEBUG Ligne \(index): heureDebut formaté = '\(debutFormatted)', heureFin formaté = '\(finFormatted)'")
                     heureComplete = "Arrivée: \(arriveeFormatted) | Examen: \(debutFormatted) - \(finFormatted)"
                 } else {
                     heureComplete = "Arrivée: \(arriveeFormatted)"
@@ -314,7 +399,7 @@ class ExcelParser {
                     heureComplete = "Horaire non spécifié"
                 }
             }
-            // Construire le contenu de l'examen
+            
             var contenuExamen = ""
             if !modalite.isEmpty {
                 contenuExamen = "📝 \(modalite)"
@@ -358,7 +443,6 @@ class ExcelParser {
         
         // ⚠️ Si le cursus est vide, on ne peut pas savoir à qui appartient ce cours
         if cleanCursus.isEmpty {
-            print("⚠️ Cours sans cursus spécifié - REJETÉ")
             return false
         }
         
@@ -405,7 +489,6 @@ class ExcelParser {
         
         // Si pas de volée spécifiée dans l'examen, ne pas l'accepter
         if cleanVolee.isEmpty {
-            print("⚠️ Examen sans volée spécifiée - REJETÉ")
             return false
         }
         
@@ -487,7 +570,6 @@ class ExcelParser {
                     .joined()
                 
                 if !fullText.isEmpty {
-                    print("✅ RichText récupéré pour l'index \(sharedStringIndex): '\(fullText)'")
                     return fullText.trimmingCharacters(in: .whitespacesAndNewlines)
                 }
             }
@@ -635,16 +717,12 @@ class ExcelParser {
     }
     
     private static func extractDuration(debut: String, fin: String) -> String {
-        // ✅ AJOUT : Log pour debug
-        print("🕐 extractDuration appelé - début: '\(debut)', fin: '\(fin)'")
-        
         // Nettoyer les espaces
         let cleanDebut = debut.trimmingCharacters(in: .whitespaces)
         let cleanFin = fin.trimmingCharacters(in: .whitespaces)
         
         // Si l'une des valeurs est vide, retourner vide
         if cleanDebut.isEmpty || cleanFin.isEmpty {
-            print("⚠️ Début ou fin vide")
             return ""
         }
         
@@ -656,7 +734,6 @@ class ExcelParser {
                let hours = Int(parts[0]),
                let minutes = Int(parts[1]) {
                 startMinutes = hours * 60 + minutes
-                print("✅ Début parsé (HH:MM): \(hours)h\(minutes) = \(startMinutes) minutes")
             }
         } else if cleanDebut.contains(".") {
             // ✅ CORRECTION : Gérer les floats avec précision
@@ -672,16 +749,13 @@ class ExcelParser {
                     if let minuteDigit = Int(String(minuteChar)) {
                         let minutes = minuteDigit * 10  // .3 devient 30
                         startMinutes = hours * 60 + minutes
-                        print("✅ Début parsé (HH.MM): \(hours)h\(minutes) = \(startMinutes) minutes")
                     }
                 } else {
                     startMinutes = hours * 60
-                    print("✅ Début parsé (HH): \(hours)h = \(startMinutes) minutes")
                 }
             }
         } else if let hours = Int(cleanDebut) {
             startMinutes = hours * 60
-            print("✅ Début parsé (HH): \(hours)h = \(startMinutes) minutes")
         }
         
         // Parser l'heure de fin
@@ -692,7 +766,6 @@ class ExcelParser {
                let hours = Int(parts[0]),
                let minutes = Int(parts[1]) {
                 endMinutes = hours * 60 + minutes
-                print("✅ Fin parsée (HH:MM): \(hours)h\(minutes) = \(endMinutes) minutes")
             }
         } else if cleanFin.contains(".") {
             // ✅ CORRECTION : Gérer les floats avec précision
@@ -708,21 +781,17 @@ class ExcelParser {
                     if let minuteDigit = Int(String(minuteChar)) {
                         let minutes = minuteDigit * 10  // .3 devient 30
                         endMinutes = hours * 60 + minutes
-                        print("✅ Fin parsée (HH.MM): \(hours)h\(minutes) = \(endMinutes) minutes")
                     }
                 } else {
                     endMinutes = hours * 60
-                    print("✅ Fin parsée (HH): \(hours)h = \(endMinutes) minutes")
                 }
             }
         } else if let hours = Int(cleanFin) {
             endMinutes = hours * 60
-            print("✅ Fin parsée (HH): \(hours)h = \(endMinutes) minutes")
         }
         
         // Si on n'a pas réussi à parser, retourner vide
         if startMinutes == 0 && endMinutes == 0 {
-            print("⚠️ Impossible de parser les heures")
             return ""
         }
         
@@ -736,14 +805,11 @@ class ExcelParser {
         
         // Vérification de sécurité : si la durée est absurde (> 24h), retourner vide
         if totalMinutes > 24 * 60 || totalMinutes < 0 {
-            print("⚠️ Durée invalide calculée: \(totalMinutes) minutes")
             return ""
         }
         
         let hours = totalMinutes / 60
         let minutes = totalMinutes % 60
-        
-        print("✅ Durée calculée: \(hours)h\(minutes)min (total: \(totalMinutes) minutes)")
         
         if hours > 0 && minutes > 0 {
             return "\(hours)h\(minutes)min"
@@ -776,23 +842,17 @@ class ExcelParser {
             if let firstRow = rows.first {
                 let cells = firstRow.cells
                 
-                for (index, cell) in cells.enumerated() {
+                for (index, _) in cells.enumerated() {
                     if let value = getCellValueOptimized(cells, at: index, sharedStrings: sharedStrings),
                        !value.isEmpty {
                         
-                        print("📋 Cellule \(index) de la première ligne: '\(value)'")
-                        
                         if value.contains("2025") || value.contains("2024") {
-                            print("📅 Titre trouvé dans Excel: '\(value)'")
-                            
                             if let dateMatch = value.range(of: "\\d{2}\\.\\d{2}\\.\\d{4}", options: .regularExpression) {
                                 let dateStr = String(value[dateMatch])
-                                print("📅 Date extraite: '\(dateStr)'")
                                 
                                 let formatter = DateFormatter()
                                 formatter.dateFormat = "dd.MM.yyyy"
                                 if let date = formatter.date(from: dateStr) {
-                                    print("✅ Date parsée avec succès: \(date)")
                                     return date
                                 }
                             }
@@ -801,11 +861,9 @@ class ExcelParser {
                 }
             }
             
-            print("⚠️ Aucune date trouvée dans l'en-tête Excel")
             return nil
             
         } catch {
-            print("❌ Erreur lors de l'extraction de la date: \(error)")
             return nil
         }
     }

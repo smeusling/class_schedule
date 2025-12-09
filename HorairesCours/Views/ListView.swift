@@ -374,6 +374,9 @@ struct CourseCell: View {
                     }
                 }
                 
+                // 🔍 NOUVEAU : Log de la salle
+                let _ = print("🔍 CourseCell: Cours='\(schedule.cours)', Salle='\(schedule.salle)', isEmpty=\(schedule.salle.isEmpty)")
+                
                 // Salle
                 if !schedule.salle.isEmpty {
                     HStack(spacing: 4) {
@@ -385,6 +388,9 @@ struct CourseCell: View {
                             .font(.system(size: 13))
                             .foregroundColor(.gray)
                     }
+                } else {
+                    // 🔍 NOUVEAU : Afficher quand la salle est vide
+                    let _ = print("⚠️ CourseCell: Salle vide pour '\(schedule.cours)'")
                 }
             }
             .padding(.vertical, 12)
