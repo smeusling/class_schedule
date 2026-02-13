@@ -4,8 +4,6 @@ import SwiftUI
 
 struct HomeView: View {
     @ObservedObject var viewModel: ScheduleViewModel
-    @State private var showVoleeSelector = false
-    @State private var showCustomURLInput = false
     @State private var selectedDataSource: DataSourceType
     
     init(viewModel: ScheduleViewModel) {
@@ -48,23 +46,21 @@ struct HomeView: View {
                                 .foregroundColor(.gray)
                                 .padding(.horizontal)
                             
-                            HStack(spacing: 12) {
-                                Text(viewModel.selectedVolee ?? "Choisissez votre volée")
-                                    .foregroundColor(viewModel.selectedVolee == nil ? .gray : .black)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding()
-                                    .background(Color.white)
-                                    .cornerRadius(12)
-                                
-                                Button("Choisir") {
-                                    showVoleeSelector = true
+                            Button(action: {
+                                viewModel.showCursusSelector = true
+                            }) {
+                                HStack(spacing: 12) {
+                                    Text(viewModel.selectedVolee ?? "Choisissez votre volée")
+                                        .foregroundColor(viewModel.selectedVolee == nil ? .gray : .black)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.gray)
                                 }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 12)
-                                .background(Color.blue)
-                                .foregroundColor(.white)
+                                .padding()
+                                .background(Color.white)
                                 .cornerRadius(12)
-                                .fontWeight(.semibold)
+                                .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
                             }
                             .padding(.horizontal)
                         }
@@ -78,10 +74,10 @@ struct HomeView: View {
                             
                             VStack(spacing: 12) {
                                 DataSourceRadioButton(
-                                    title: "Semestre Automne",
-                                    isSelected: selectedDataSource == .semestreAutomne
+                                    title: "Semestre",
+                                    isSelected: selectedDataSource == .semestre
                                 ) {
-                                    selectedDataSource = .semestreAutomne
+                                    selectedDataSource = .semestre
                                 }
                                 
                                 DataSourceRadioButton(
@@ -90,17 +86,6 @@ struct HomeView: View {
                                 ) {
                                     selectedDataSource = .examens
                                 }
-                                
-                                // ⚠️ COMMENTÉ - Fonctionnalité non testée
-                                /*
-                                DataSourceRadioButton(
-                                    title: "Entrer mon URL",
-                                    isSelected: selectedDataSource == .customURL
-                                ) {
-                                    selectedDataSource = .customURL
-                                    showCustomURLInput = true
-                                }
-                                */
                             }
                         }
                         
@@ -127,34 +112,20 @@ struct HomeView: View {
                 }
             }
             .navigationBarHidden(true)
-            .sheet(isPresented: $showVoleeSelector) {
+            .sheet(isPresented: $viewModel.showCursusSelector) {
                 VoleeOnlySelector(viewModel: viewModel)
             }
-            // ⚠️ COMMENTÉ - Sheet pour URL personnalisée
-            /*
-            .sheet(isPresented: $showCustomURLInput) {
-                CustomURLInputView(viewModel: viewModel, isPresented: $showCustomURLInput)
-            }
-            */
         }
     }
     
     private func validateAndContinue() {
         // Définir la source de données selon la sélection
-        switch selectedDataSource {
-        case .semestreAutomne:
-            viewModel.setDataSource(DataSource.semestreAutomne)
-        case .examens:
-            viewModel.setDataSource(DataSource.examens)
-        case .customURL:
-            // ⚠️ COMMENTÉ - Fonctionnalité non testée
-            // L'URL personnalisée est déjà définie via CustomURLInputView
-            break
-        }
+        let source = DataSource.automatic(for: selectedDataSource)
+        viewModel.setDataSource(source)
         
         // Vérifier que modalité est bien sélectionnée
         if viewModel.selectedModalites.isEmpty {
-            viewModel.selectedModalites = [.tempsPlein] // Valeur par défaut
+            viewModel.selectedModalites = [.tempsPlein]
         }
         
         viewModel.showHomeView = false

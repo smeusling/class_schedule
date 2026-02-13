@@ -27,12 +27,12 @@ class ScheduleViewModel: ObservableObject {
     @Published var isOfflineMode = false
     @Published var showCursusSelector = false
     
-    // ✅ NOUVEAU : HomeView et gestion des sources
+    // ✅ SIMPLIFIÉ : Gestion des écrans
     @Published var showHomeView = false
-    @Published var currentDataSource: DataSource = DataSource.semestreAutomne
+    @Published var currentDataSource: DataSource = DataSource.automatic(for: .semestre)
     @Published var currentFileType: FileType = .cours
     
-    // ✅ NOUVEAU : Alertes de mise à jour
+    // Alertes de mise à jour
     @Published var showUpdateAlert = false
     @Published var updateAlertMessage = ""
     
@@ -53,6 +53,15 @@ class ScheduleViewModel: ObservableObject {
         Dictionary(grouping: filteredSchedules) { schedule in
             Calendar.current.startOfDay(for: schedule.date)
         }
+    }
+    
+    // ✅ NOUVEAU : Obtenir le nom du semestre actuel
+    var currentSemestreName: String {
+        if currentDataSource.type == .examens {
+            return "Examens"
+        }
+        let semestre = SemestreType.current()
+        return "Semestre \(semestre.rawValue)"
     }
     
     func setup(modelContext: ModelContext) {
@@ -105,7 +114,7 @@ class ScheduleViewModel: ObservableObject {
         }
     }
     
-    // ✅ NOUVEAU : Définir la source de données
+    // ✅ SIMPLIFIÉ : Définir la source de données
     func setDataSource(_ source: DataSource) {
         currentDataSource = source
         currentFileType = source.fileType
@@ -123,25 +132,27 @@ class ScheduleViewModel: ObservableObject {
            let source = try? JSONDecoder().decode(DataSource.self, from: data) {
             currentDataSource = source
             currentFileType = source.fileType
+        } else {
+            // Par défaut, utiliser le semestre automatique
+            currentDataSource = DataSource.automatic(for: .semestre)
         }
     }
     
-    // ✅ MODIFIÉ : Vérifier si le fichier a été mis à jour
+    // ✅ SIMPLIFIÉ : Vérifier les mises à jour
     func checkForUpdates() async {
         guard let storageManager = storageManager else { return }
         guard selectedVolee != nil else { return }
         
         print("🔍 Vérification des mises à jour...")
         
-        // ✅ NOUVEAU : Forcer la recherche du fichier le plus récent
         DataSourceManager.clearCache()
         
         let mostRecentURL: String?
-        switch currentFileType {
+        switch currentDataSource.type {
         case .examens:
             mostRecentURL = await DataSourceManager.getMostRecentExamenURL()
-        case .cours:
-            mostRecentURL = await DataSourceManager.getMostRecentCoursURL()
+        case .semestre:
+            mostRecentURL = await DataSourceManager.getMostRecentSemestreURL()
         }
         
         guard let urlString = mostRecentURL, let url = URL(string: urlString) else {
@@ -201,20 +212,16 @@ class ScheduleViewModel: ObservableObject {
         }
     }
     
-    // ✅ MODIFIÉ : Charger la liste des volées
+    // ✅ SIMPLIFIÉ : Charger la liste des volées
     func loadCursusList() async {
         isLoading = true
-        print("🔄 Chargement de la liste des volées...")
+        print("📄 Chargement de la liste des volées...")
         
         do {
-            // ✅ NOUVEAU : Utiliser le fichier le plus récent
-            let mostRecentURL: String?
-            switch currentFileType {
-            case .examens:
-                mostRecentURL = await DataSourceManager.getMostRecentExamenURL()
-            case .cours:
-                mostRecentURL = await DataSourceManager.getMostRecentCoursURL()
-            }
+            // ✅ CORRECTION : Toujours charger les volées depuis le fichier de semestre
+            // (peu importe si l'utilisateur a choisi Semestre ou Examens)
+            print("📥 Chargement des volées depuis le fichier semestre...")
+            let mostRecentURL = await DataSourceManager.getMostRecentSemestreURL()
             
             guard let urlString = mostRecentURL, let url = URL(string: urlString) else {
                 throw NSError(domain: "DataSourceError", code: -1, userInfo: [
@@ -238,7 +245,7 @@ class ScheduleViewModel: ObservableObject {
         isLoading = false
     }
     
-    // ✅ MODIFIÉ : Charger les données
+    // ✅ SIMPLIFIÉ : Charger les données
     func loadData(forceRefresh: Bool = false) async {
         guard let storageManager = storageManager else {
             print("❌ StorageManager non initialisé")
@@ -257,7 +264,7 @@ class ScheduleViewModel: ObservableObject {
             return
         }
         
-        print("🔄 LoadData - Volée: \(selectedVolee), Modalités: \(selectedModalites.map { $0.rawValue }), Type: \(currentFileType.rawValue), ForceRefresh: \(forceRefresh)")
+        print("📄 LoadData - Volée: \(selectedVolee), Modalités: \(selectedModalites.map { $0.rawValue }), Type: \(currentFileType.rawValue), ForceRefresh: \(forceRefresh)")
         
         if !forceRefresh && storageManager.hasData() {
             print("💾 Chargement depuis le cache")
@@ -270,13 +277,12 @@ class ScheduleViewModel: ObservableObject {
         isOfflineMode = false
         
         do {
-            // ✅ NOUVEAU : Obtenir l'URL du fichier le plus récent
             let mostRecentURL: String?
-            switch currentFileType {
+            switch currentDataSource.type {
             case .examens:
                 mostRecentURL = await DataSourceManager.getMostRecentExamenURL()
-            case .cours:
-                mostRecentURL = await DataSourceManager.getMostRecentCoursURL()
+            case .semestre:
+                mostRecentURL = await DataSourceManager.getMostRecentSemestreURL()
             }
             
             guard let urlString = mostRecentURL, let url = URL(string: urlString) else {

@@ -5,7 +5,10 @@ import CoreXLSX
 
 class ExcelParser {
     
-    // Extraire uniquement les volées uniques (sans Temps Plein/Partiel)
+    // Services/ExcelParser.swift
+
+    // ✅ MODIFIER la fonction extractVolees :
+
     static func extractVolees(_ data: Data) throws -> [String] {
         guard let xlsx = try? XLSXFile(data: data) else {
             throw NSError(domain: "ExcelParsingError", code: -1)
@@ -18,65 +21,158 @@ class ExcelParser {
         
         let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: firstWorkbook)
         
-        // Chercher l'onglet "Menu déroulant"
-        guard let menuPath = worksheetPaths.first(where: {
+        // 1️⃣ Essayer d'abord de trouver l'onglet "Menu déroulant" (fichier Automne)
+        if let menuPath = worksheetPaths.first(where: {
             $0.name!.lowercased().contains("menu") ||
             $0.name!.lowercased().contains("déroulant") ||
             $0.name!.lowercased().contains("deroulant")
-        })?.path else {
-            print("⚠️ Onglet 'Menu déroulant' non trouvé")
+        })?.path {
+            
+            print("✅ Onglet 'Menu déroulant' trouvé - extraction depuis Menu déroulant")
+            return extractVoleesFromMenuDeroulant(xlsx: xlsx, menuPath: menuPath)
+            
+        } else {
+            // 2️⃣ Sinon, extraire depuis la colonne "Volée" dans l'onglet "Horaire" (fichier Printemps)
+            print("⚠️ Onglet 'Menu déroulant' non trouvé - extraction depuis l'onglet Horaire")
+            
+            guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path else {
+                print("❌ Onglet 'Horaire' non trouvé non plus")
+                return []
+            }
+            
+            return try extractVoleesFromHoraireSheet(xlsx: xlsx, horairePath: horairePath)
+        }
+    }
+
+    // ✅ NOUVELLE FONCTION : Extraire depuis "Menu déroulant"
+    private static func extractVoleesFromMenuDeroulant(xlsx: XLSXFile, menuPath: String) -> [String] {
+        var voleesSet = Set<String>()
+        
+        do {
+            let worksheet = try xlsx.parseWorksheet(at: menuPath)
+            let rows = worksheet.data?.rows ?? []
+            let sharedStrings = try? xlsx.parseSharedStrings()
+            
+            var consecutiveNonVoleeCount = 0
+            
+            // Lire uniquement la colonne A (Volée)
+            for (index, row) in rows.enumerated() {
+                if index == 0 { continue } // Skip l'en-tête "Volée"
+                
+                let cells = row.cells
+                guard let volee = getCellValueOptimized(cells, at: 0, sharedStrings: sharedStrings), !volee.isEmpty else {
+                    continue
+                }
+                
+                // Nettoyer : enlever "Temps Plein", "Temps partiel", "Partiel", "Plein", "Tous"
+                var cleanedVolee = volee
+                    .replacingOccurrences(of: " Temps plein", with: "", options: .caseInsensitive)
+                    .replacingOccurrences(of: " Temps Plein", with: "", options: .caseInsensitive)
+                    .replacingOccurrences(of: " Temps partiel", with: "", options: .caseInsensitive)
+                    .replacingOccurrences(of: " Temps Partiel", with: "", options: .caseInsensitive)
+                    .replacingOccurrences(of: " Partiel", with: "", options: .caseInsensitive)
+                    .replacingOccurrences(of: " Plein", with: "", options: .caseInsensitive)
+                    .replacingOccurrences(of: " Tous", with: "", options: .caseInsensitive)
+                    .replacingOccurrences(of: " (8 semestres)", with: "", options: .caseInsensitive)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                // Vérifier si c'est une vraie volée (commence par ICLS, IPS, MScIPS, ou Etudiants)
+                let lowercased = cleanedVolee.lowercased()
+                let startsWithValidPrefix = lowercased.hasPrefix("icls") ||
+                                           lowercased.hasPrefix("ips") ||
+                                           lowercased.hasPrefix("mscips") ||
+                                           lowercased.hasPrefix("etudiants")
+                
+                // Si ce n'est pas une volée, on compte
+                if !startsWithValidPrefix {
+                    consecutiveNonVoleeCount += 1
+                    // Si on a 3 lignes consécutives qui ne sont pas des volées, on arrête
+                    if consecutiveNonVoleeCount >= 3 {
+                        print("🛑 Arrêt de la lecture - fin de la section des volées")
+                        break
+                    }
+                    continue
+                }
+                
+                // Réinitialiser le compteur si on trouve une volée
+                consecutiveNonVoleeCount = 0
+                
+                // Gérer les cursus multiples séparés par "/"
+                let parts = cleanedVolee.components(separatedBy: "/")
+                for part in parts {
+                    let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let partLowercased = trimmed.lowercased()
+                    
+                    // Vérifier que cette partie est aussi une vraie volée
+                    let partIsValid = partLowercased.hasPrefix("icls") ||
+                                    partLowercased.hasPrefix("ips") ||
+                                    partLowercased.hasPrefix("mscips") ||
+                                    partLowercased.hasPrefix("etudiants")
+                    
+                    if partIsValid && trimmed.count >= 3 {
+                        // Nettoyer les préfixes de chiffres seuls (comme "7 IPS 7-24" -> "IPS 7-24")
+                        var finalTrimmed = trimmed
+                        
+                        let components = trimmed.components(separatedBy: " ")
+                        if components.count > 1, let firstComponent = components.first, firstComponent.allSatisfy({ $0.isNumber }) {
+                            finalTrimmed = components.dropFirst().joined(separator: " ")
+                        }
+                        
+                        voleesSet.insert(finalTrimmed)
+                        print("🎓 Volée trouvée: '\(finalTrimmed)'")
+                    }
+                }
+            }
+            
+            let sortedVolees = Array(voleesSet).sorted()
+            print("✅ Total volées extraites: \(sortedVolees.count)")
+            print("📋 Liste finale: \(sortedVolees)")
+            
+            return sortedVolees
+            
+        } catch {
+            print("❌ Erreur lors de l'extraction depuis Menu déroulant: \(error)")
             return []
         }
+    }
+
+    // ✅ NOUVELLE FONCTION : Extraire depuis l'onglet "Horaire"
+    private static func extractVoleesFromHoraireSheet(xlsx: XLSXFile, horairePath: String) throws -> [String] {
+        var voleesSet = Set<String>()
         
-        print("✅ Onglet trouvé: \(worksheetPaths.first(where: { $0.path == menuPath })?.name ?? "")")
-        
-        let worksheet = try xlsx.parseWorksheet(at: menuPath)
+        let worksheet = try xlsx.parseWorksheet(at: horairePath)
         let rows = worksheet.data?.rows ?? []
         let sharedStrings = try? xlsx.parseSharedStrings()
         
-        var consecutiveNonVoleeCount = 0
+        print("📊 Parsing de l'onglet Horaire - \(rows.count) lignes...")
         
-        // Lire uniquement la colonne A (Volée)
+        // Trouver la colonne "Volée"
+        guard let voleeCol = findColumnIndex(in: rows, sharedStrings: sharedStrings, columnName: "volée") else {
+            print("❌ Colonne 'Volée' non trouvée")
+            return []
+        }
+        
+        print("✅ Colonne 'Volée' trouvée à l'index \(voleeCol)")
+        
+        // Parcourir toutes les lignes et extraire les volées uniques
         for (index, row) in rows.enumerated() {
-            if index == 0 { continue } // Skip l'en-tête "Volée"
+            if index < 3 { continue } // Skip les en-têtes
             
             let cells = row.cells
-            guard let volee = getCellValueOptimized(cells, at: 0, sharedStrings: sharedStrings), !volee.isEmpty else {
+            guard let volee = getCellValueOptimized(cells, at: voleeCol, sharedStrings: sharedStrings), !volee.isEmpty else {
                 continue
             }
             
-            // Nettoyer : enlever "Temps Plein", "Temps partiel", "Partiel", "Plein", "Tous"
+            // Nettoyer la volée (enlever "Tous", "Temps Plein", "Temps Partiel", etc.)
             var cleanedVolee = volee
+                .replacingOccurrences(of: " Tous", with: "", options: .caseInsensitive)
                 .replacingOccurrences(of: " Temps plein", with: "", options: .caseInsensitive)
                 .replacingOccurrences(of: " Temps Plein", with: "", options: .caseInsensitive)
                 .replacingOccurrences(of: " Temps partiel", with: "", options: .caseInsensitive)
                 .replacingOccurrences(of: " Temps Partiel", with: "", options: .caseInsensitive)
                 .replacingOccurrences(of: " Partiel", with: "", options: .caseInsensitive)
                 .replacingOccurrences(of: " Plein", with: "", options: .caseInsensitive)
-                .replacingOccurrences(of: " Tous", with: "", options: .caseInsensitive)
-                .replacingOccurrences(of: " (8 semestres)", with: "", options: .caseInsensitive)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            // Vérifier si c'est une vraie volée (commence par ICLS, IPS, MScIPS, ou Etudiants)
-            let lowercased = cleanedVolee.lowercased()
-            let startsWithValidPrefix = lowercased.hasPrefix("icls") ||
-                                       lowercased.hasPrefix("ips") ||
-                                       lowercased.hasPrefix("mscips") ||
-                                       lowercased.hasPrefix("etudiants")
-            
-            // Si ce n'est pas une volée, on compte
-            if !startsWithValidPrefix {
-                consecutiveNonVoleeCount += 1
-                // Si on a 3 lignes consécutives qui ne sont pas des volées, on arrête
-                if consecutiveNonVoleeCount >= 3 {
-                    print("🛑 Arrêt de la lecture - fin de la section des volées")
-                    break
-                }
-                continue
-            }
-            
-            // Réinitialiser le compteur si on trouve une volée
-            consecutiveNonVoleeCount = 0
             
             // Gérer les cursus multiples séparés par "/"
             let parts = cleanedVolee.components(separatedBy: "/")
@@ -85,22 +181,13 @@ class ExcelParser {
                 let partLowercased = trimmed.lowercased()
                 
                 // Vérifier que cette partie est aussi une vraie volée
-                let partIsValid = partLowercased.hasPrefix("icls") ||
-                                partLowercased.hasPrefix("ips") ||
-                                partLowercased.hasPrefix("mscips") ||
-                                partLowercased.hasPrefix("etudiants")
+                let isValidVolee = partLowercased.hasPrefix("icls") ||
+                                  partLowercased.hasPrefix("ips") ||
+                                  partLowercased.hasPrefix("mscips") ||
+                                  partLowercased.hasPrefix("etudiants")
                 
-                if partIsValid && trimmed.count >= 3 {
-                    // Nettoyer les préfixes de chiffres seuls (comme "7 IPS 7-24" -> "IPS 7-24")
-                    var finalTrimmed = trimmed
-                    
-                    let components = trimmed.components(separatedBy: " ")
-                    if components.count > 1, let firstComponent = components.first, firstComponent.allSatisfy({ $0.isNumber }) {
-                        finalTrimmed = components.dropFirst().joined(separator: " ")
-                    }
-                    
-                    voleesSet.insert(finalTrimmed)
-                    print("🎓 Volée trouvée: '\(finalTrimmed)'")
+                if isValidVolee && trimmed.count >= 3 {
+                    voleesSet.insert(trimmed)
                 }
             }
         }

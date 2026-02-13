@@ -24,7 +24,7 @@ struct TopBarView: View {
                         .foregroundColor(.white.opacity(0.8))
                         .lineLimit(1)
                     
-                    Text(viewModel.currentDataSource.type.rawValue)
+                    Text(viewModel.currentSemestreName)
                         .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.6))
                         .lineLimit(1)
@@ -53,6 +53,6 @@ struct TopBarView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(Color(red: 0.2, green: 0.25, blue: 0.3))
+        .background(Color(red: 116/255, green: 118/255, blue: 216/255))
     }
 }

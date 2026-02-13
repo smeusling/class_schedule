@@ -149,9 +149,11 @@ struct CustomURLInputView: View {
                 let isValid = try ExcelParser.validateFileStructure(data, fileType: selectedFileType)
                 
                 if isValid {
-                    // Sauvegarder l'URL personnalisée
+                    // ✅ CORRIGÉ : Créer une DataSource simplifiée
+                    let sourceType: DataSourceType = selectedFileType == .cours ? .semestre : .examens
+                    
                     let customSource = DataSource(
-                        type: .customURL,
+                        type: sourceType,
                         url: customURL,
                         fileType: selectedFileType
                     )
