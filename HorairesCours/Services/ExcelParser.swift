@@ -199,13 +199,153 @@ class ExcelParser {
         return sortedVolees
     }
     
-    // Parser avec filtre de volée ET modalités ET type de fichier
-    static func parse(_ data: Data, selectedVolee: String?, modalites: [Modalite], fileType: FileType) throws -> [CourseSchedule] {
+    // ✅ NOUVELLE FONCTION : Extraire les options disponibles par volée
+    static func extractOptionsForVolees(_ data: Data) throws -> [String: Set<String>] {
+        guard let xlsx = try? XLSXFile(data: data) else {
+            throw NSError(domain: "ExcelParsingError", code: -1)
+        }
+        
+        var optionsByVolee: [String: Set<String>] = [:]
+        
+        guard let firstWorkbook = try xlsx.parseWorkbooks().first else { return [:] }
+        
+        let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: firstWorkbook)
+        
+        guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path else {
+            return [:]
+        }
+        
+        let worksheet = try xlsx.parseWorksheet(at: horairePath)
+        let rows = worksheet.data?.rows ?? []
+        let sharedStrings = try? xlsx.parseSharedStrings()
+        
+        print("📊 Extraction des options par volée...")
+        
+        // Trouver les colonnes nécessaires
+        let columnMap = buildColumnMap(rows: rows, sharedStrings: sharedStrings, fileType: .cours)
+        
+        guard let cursusCol = columnMap["cursus"],
+              let optionCol = columnMap["option"] else {
+            print("❌ Colonnes 'cursus' ou 'option' non trouvées")
+            return [:]
+        }
+        
+        print("✅ Colonnes trouvées: cursus=\(cursusCol), option=\(optionCol)")
+        
+        // Parcourir toutes les lignes
+        for (index, row) in rows.enumerated() {
+            if index < 3 { continue } // Skip les en-têtes
+            
+            let cells = row.cells
+            
+            guard let cursus = getCellValueOptimized(cells, at: cursusCol, sharedStrings: sharedStrings),
+                  !cursus.isEmpty else {
+                continue
+            }
+            
+            guard let option = getCellValueOptimized(cells, at: optionCol, sharedStrings: sharedStrings),
+                  !option.isEmpty else {
+                continue
+            }
+            
+            // Nettoyer le cursus (enlever modalités)
+            let cleanedCursus = cursus
+                .replacingOccurrences(of: " Temps plein", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: " Temps Plein", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: " Temps partiel", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: " Temps Partiel", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: " Partiel", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: " Plein", with: "", options: .caseInsensitive)
+                .replacingOccurrences(of: " Tous", with: "", options: .caseInsensitive)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // Séparer les volées multiples
+            let volees = cleanedCursus.components(separatedBy: "/")
+            
+            for volee in volees {
+                let trimmedVolee = volee.trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                // Vérifier que c'est une vraie volée
+                let lowercased = trimmedVolee.lowercased()
+                let isValid = lowercased.hasPrefix("icls") ||
+                             lowercased.hasPrefix("ips") ||
+                             lowercased.hasPrefix("mscips") ||
+                             lowercased.hasPrefix("etudiants")
+                
+                if isValid && trimmedVolee.count >= 3 {
+                                // Initialiser le Set si nécessaire
+                                if optionsByVolee[trimmedVolee] == nil {
+                                    optionsByVolee[trimmedVolee] = Set<String>()
+                                }
+                                
+                                // ✅ Nettoyer et séparer l'option
+                                let cleanedOption = option.trimmingCharacters(in: .whitespacesAndNewlines)
+                                
+                                // ✅ Filtrer les options à ignorer
+                                let lowerOption = cleanedOption.lowercased()
+                                if lowerOption.contains("tous") ||
+                                   lowerOption.contains("toutes orientations") ||
+                                   cleanedOption.isEmpty {
+                                    // Ne pas ajouter ces options
+                                    continue
+                                }
+                                
+                                // ✅ Séparer d'abord les options multiples avec "/" ou ","
+                                let separators = CharacterSet(charactersIn: "/,")
+                                let optionParts = cleanedOption.components(separatedBy: separators)
+                                
+                                for part in optionParts {
+                                    let trimmedPart = part.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    if trimmedPart.isEmpty || trimmedPart.count <= 2 {
+                                        continue
+                                    }
+                                    
+                                    // ✅ Normaliser chaque partie individuellement
+                                    var normalizedPart = trimmedPart
+                                    let lowerPart = trimmedPart.lowercased()
+                                    
+                                    // Mapper les variations vers les noms standards
+                                    if lowerPart == "primaires" || lowerPart == "soins primaires" {
+                                        normalizedPart = "Soins primaires"
+                                    } else if lowerPart == "adultes" || lowerPart == "soins aux adultes" {
+                                        normalizedPart = "Soins aux adultes"
+                                    } else if lowerPart == "pédiatriques" || lowerPart == "pediatriques" ||
+                                              lowerPart == "pédiatrie" || lowerPart == "pediatrie" ||
+                                              lowerPart == "soins aux enfants" {
+                                        normalizedPart = "Soins aux enfants"
+                                    } else if lowerPart == "santé mentale" {
+                                        normalizedPart = "Santé mentale"
+                                    } else if lowerPart == "option clinique" {
+                                        normalizedPart = "Option clinique"
+                                    } else if lowerPart == "option recherche" {
+                                        normalizedPart = "Option recherche"
+                                    }
+                                    // Sinon, garder le nom tel quel (première lettre en majuscule)
+                                    else if !normalizedPart.isEmpty {
+                                        normalizedPart = normalizedPart.prefix(1).uppercased() + normalizedPart.dropFirst()
+                                    }
+                                    
+                                    optionsByVolee[trimmedVolee]?.insert(normalizedPart)
+                                }
+                            }
+            }
+        }
+        
+        // Afficher les résultats
+        for (volee, options) in optionsByVolee.sorted(by: { $0.key < $1.key }) {
+            print("🎯 \(volee): \(options.sorted().joined(separator: ", "))")
+        }
+        
+        return optionsByVolee
+    }
+    
+    // Parser avec filtre de volée ET modalités ET option ET type de fichier
+    static func parse(_ data: Data, selectedVolee: String?, modalites: [Modalite], selectedOption: String?, fileType: FileType) throws -> [CourseSchedule] {
         switch fileType {
         case .cours:
-            return try parseCoursSchedule(data, selectedVolee: selectedVolee, modalites: modalites)
+            return try parseCoursSchedule(data, selectedVolee: selectedVolee, modalites: modalites, selectedOption: selectedOption)
         case .examens:
-            return try parseExamensSchedule(data, selectedVolee: selectedVolee, modalites: modalites)
+            return try parseExamensSchedule(data, selectedVolee: selectedVolee, modalites: modalites, selectedOption: selectedOption)
         }
     }
     
@@ -221,8 +361,26 @@ class ExcelParser {
                     let cleanValue = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                     let cleanSearch = columnName.lowercased()
                     
-                    if cleanValue == cleanSearch || cleanValue.contains(cleanSearch) {
-                        print("✅ Colonne '\(columnName)' trouvée à l'index \(index) (valeur: '\(value)')")
+                    // ✅ CORRECTION : Chercher une correspondance EXACTE d'abord
+                    if cleanValue == cleanSearch {
+                        print("✅ Colonne '\(columnName)' trouvée à l'index \(index) (valeur: '\(value)') - EXACT MATCH")
+                        return index
+                    }
+                }
+            }
+        }
+        
+        // ✅ Si pas de match exact, chercher si ça contient (fallback)
+        for row in rows.prefix(3) {
+            let cells = row.cells
+            
+            for (index, _) in cells.enumerated() {
+                if let value = getCellValueOptimized(cells, at: index, sharedStrings: sharedStrings) {
+                    let cleanValue = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    let cleanSearch = columnName.lowercased()
+                    
+                    if cleanValue.contains(cleanSearch) {
+                        print("✅ Colonne '\(columnName)' trouvée à l'index \(index) (valeur: '\(value)') - PARTIAL MATCH")
                         return index
                     }
                 }
@@ -238,7 +396,7 @@ class ExcelParser {
         
         let columnsToFind: [String]
         if fileType == .cours {
-            columnsToFind = ["date", "heure début", "heure fin", "nombre période", "cours", "contenu", "option", "enseignant", "salle"]
+            columnsToFind = ["date", "heure début", "heure fin", "nombre période", "contenu", "option", "enseignant", "salle"]
         } else {
             columnsToFind = ["date", "arrivée", "heure début", "heure fin", "cours", "modalité", "anonymisation", "volée", "option", "enseignant", "salle"]
         }
@@ -251,14 +409,23 @@ class ExcelParser {
             }
         }
         
-        // ✅ SPÉCIAL : Pour la colonne Cursus qui n'a pas de titre dans le fichier cours
+        // ✅ SPÉCIAL : Pour le fichier cours, déduire les colonnes sans titre
         if fileType == .cours {
-            // La colonne cursus est juste avant "Option" (qui a un titre)
+            // La colonne "Cours" (sans titre) est juste AVANT "Contenu du cours"
+            if let contenuIndex = columnMap["contenu"] {
+                let coursIndex = contenuIndex - 1
+                columnMap["cours"] = coursIndex
+                print("✅ Colonne 'cours' déduite à l'index \(coursIndex) (juste avant Contenu)")
+            }
+            
+            // La colonne "Cursus" (sans titre) est juste AVANT "Option"
             if let optionIndex = columnMap["option"] {
                 let cursusIndex = optionIndex - 1
                 columnMap["cursus"] = cursusIndex
                 print("✅ Colonne 'cursus' déduite à l'index \(cursusIndex) (juste avant Option)")
             }
+        } else {
+            // Pour les examens, cursus n'existe pas, on garde "cours" tel quel
         }
         
         print("📋 Mapping des colonnes: \(columnMap)")
@@ -266,7 +433,7 @@ class ExcelParser {
     }
     
     // Parser pour les horaires de cours
-    private static func parseCoursSchedule(_ data: Data, selectedVolee: String?, modalites: [Modalite]) throws -> [CourseSchedule] {
+    private static func parseCoursSchedule(_ data: Data, selectedVolee: String?, modalites: [Modalite], selectedOption: String?) throws -> [CourseSchedule] {
         guard let xlsx = try? XLSXFile(data: data) else {
             throw NSError(domain: "ExcelParsingError", code: -1)
         }
@@ -285,13 +452,13 @@ class ExcelParser {
         let worksheet = try xlsx.parseWorksheet(at: horairePath)
         let sharedStrings = try? xlsx.parseSharedStrings()
         
-        scheduleItems = parseCoursWorksheetDynamic(worksheet, sharedStrings: sharedStrings, colors: colors, colorIndex: &colorIndex, selectedVolee: selectedVolee, modalites: modalites)
+        scheduleItems = parseCoursWorksheetDynamic(worksheet, sharedStrings: sharedStrings, colors: colors, colorIndex: &colorIndex, selectedVolee: selectedVolee, modalites: modalites, selectedOption: selectedOption)
         
         return scheduleItems.sorted { $0.date < $1.date }
     }
     
     // NOUVEAU : Parser pour les horaires d'examens
-    private static func parseExamensSchedule(_ data: Data, selectedVolee: String?, modalites: [Modalite]) throws -> [CourseSchedule] {
+    private static func parseExamensSchedule(_ data: Data, selectedVolee: String?, modalites: [Modalite], selectedOption: String?) throws -> [CourseSchedule] {
         guard let xlsx = try? XLSXFile(data: data) else {
             throw NSError(domain: "ExcelParsingError", code: -1)
         }
@@ -310,12 +477,12 @@ class ExcelParser {
         let worksheet = try xlsx.parseWorksheet(at: horairePath)
         let sharedStrings = try? xlsx.parseSharedStrings()
         
-        scheduleItems = parseExamensWorksheetDynamic(worksheet, sharedStrings: sharedStrings, colors: colors, colorIndex: &colorIndex, selectedVolee: selectedVolee, modalites: modalites)
+        scheduleItems = parseExamensWorksheetDynamic(worksheet, sharedStrings: sharedStrings, colors: colors, colorIndex: &colorIndex, selectedVolee: selectedVolee, modalites: modalites, selectedOption: selectedOption)
         
         return scheduleItems.sorted { $0.date < $1.date }
     }
-
-    private static func parseCoursWorksheetDynamic(_ worksheet: Worksheet, sharedStrings: SharedStrings?, colors: [ScheduleColor], colorIndex: inout Int, selectedVolee: String?, modalites: [Modalite]) -> [CourseSchedule] {
+    
+    private static func parseCoursWorksheetDynamic(_ worksheet: Worksheet, sharedStrings: SharedStrings?, colors: [ScheduleColor], colorIndex: inout Int, selectedVolee: String?, modalites: [Modalite], selectedOption: String?) -> [CourseSchedule] {
         var scheduleItems: [CourseSchedule] = []
         let rows = worksheet.data?.rows ?? []
         
@@ -337,10 +504,11 @@ class ExcelParser {
         let nombrePeriodeCol = columnMap["nombre période"] ?? columnMap["nombre periode"] ?? 4
         let contenuCol = columnMap["contenu"] ?? columnMap["contenu du cours"] ?? 6
         let cursusCol = columnMap["cursus"] ?? 7
+        let optionCol = columnMap["option"] ?? 8
         let enseignantCol = columnMap["enseignant"] ?? 9
         let salleCol = columnMap["salle"] ?? 10
         
-        print("📍 Colonnes utilisées: date=\(dateCol), cours=\(coursCol), cursus=\(cursusCol), salle=\(salleCol), enseignant=\(enseignantCol)")
+        print("🔍 Colonnes utilisées: date=\(dateCol), cours=\(coursCol), cursus=\(cursusCol), option=\(optionCol), salle=\(salleCol), enseignant=\(enseignantCol)")
         
         for (index, row) in rows.enumerated() {
             if index < 2 { continue }
@@ -354,6 +522,7 @@ class ExcelParser {
             let cours = getCellValueOptimized(cells, at: coursCol, sharedStrings: sharedStrings) ?? ""
             let contenuCours = getCellValueOptimized(cells, at: contenuCol, sharedStrings: sharedStrings) ?? ""
             let cursus = getCellValueOptimized(cells, at: cursusCol, sharedStrings: sharedStrings) ?? ""
+            let option = getCellValueOptimized(cells, at: optionCol, sharedStrings: sharedStrings) ?? ""
             let enseignant = getCellValueOptimized(cells, at: enseignantCol, sharedStrings: sharedStrings) ?? ""
             
             // ✅ Nettoyer les erreurs Excel
@@ -369,6 +538,75 @@ class ExcelParser {
                     continue
                 }
             }
+            
+            // ✅ NOUVEAU : Filtrer par option si sélectionnée
+                    if let selectedOption = selectedOption, !selectedOption.isEmpty {
+                        let cleanOption = option.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let lowerCleanOption = cleanOption.lowercased()
+                        
+                        // Si l'option du cours est vide, "Tous", ou "IPS toutes orientations", on l'affiche pour tout le monde
+                        if cleanOption.isEmpty ||
+                           lowerCleanOption.contains("tous") ||
+                           lowerCleanOption.contains("toutes orientations") {
+                            // Ce cours est pour tout le monde, on l'affiche
+                            print("✅ Cours accepté (option vide/tous): \(cours)")
+                        } else {
+                            // ✅ Séparer les options multiples par "/" ou ","
+                            let separators = CharacterSet(charactersIn: "/,")
+                            let courseOptionParts = cleanOption.components(separatedBy: separators)
+                                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                            
+                            let selectedLower = selectedOption.lowercased()
+                            
+                            print("🔍 Cours: '\(cours)' - Option cours: '\(cleanOption)' - Parts: \(courseOptionParts)")
+                            print("   Option sélectionnée: '\(selectedOption)'")
+                            
+                            // Fonction pour normaliser et comparer
+                            func normalizeAndMatch(_ part: String, _ selected: String) -> Bool {
+                                let lowerPart = part.lowercased()
+                                
+                                // Correspondances directes
+                                if lowerPart == selected || selected.contains(lowerPart) || lowerPart.contains(selected) {
+                                    print("   ✅ Match direct: '\(part)' <-> '\(selected)'")
+                                    return true
+                                }
+                                
+                                // Correspondances par équivalence
+                                if selected.contains("primaire") && (lowerPart == "primaires" || lowerPart.contains("primaire")) {
+                                    print("   ✅ Match primaires: '\(part)'")
+                                    return true
+                                }
+                                if selected.contains("adulte") && (lowerPart == "adultes" || lowerPart.contains("adulte")) {
+                                    print("   ✅ Match adultes: '\(part)'")
+                                    return true
+                                }
+                                if selected.contains("enfant") && (lowerPart == "pédiatriques" || lowerPart == "pediatriques" ||
+                                                                    lowerPart == "pédiatrie" || lowerPart == "pediatrie" ||
+                                                                    lowerPart.contains("enfant")) {
+                                    print("   ✅ Match enfants: '\(part)'")
+                                    return true
+                                }
+                                if selected.contains("mentale") && lowerPart.contains("mentale") {
+                                    print("   ✅ Match mentale: '\(part)'")
+                                    return true
+                                }
+                                
+                                return false
+                            }
+                            
+                            // Vérifier si l'option sélectionnée correspond à au moins une des options du cours
+                            let matches = courseOptionParts.contains { part in
+                                !part.isEmpty && normalizeAndMatch(part, selectedLower)
+                            }
+                            
+                            if !matches {
+                                print("   ❌ Cours rejeté - aucun match")
+                                continue
+                            } else {
+                                print("   ✅ Cours accepté - match trouvé")
+                            }
+                        }
+                    }
             
             guard !cours.isEmpty else { continue }
             guard let date = parseDate(dateStr) else {
@@ -396,7 +634,7 @@ class ExcelParser {
         return scheduleItems
     }
     
-    private static func parseExamensWorksheetDynamic(_ worksheet: Worksheet, sharedStrings: SharedStrings?, colors: [ScheduleColor], colorIndex: inout Int, selectedVolee: String?, modalites: [Modalite]) -> [CourseSchedule] {
+    private static func parseExamensWorksheetDynamic(_ worksheet: Worksheet, sharedStrings: SharedStrings?, colors: [ScheduleColor], colorIndex: inout Int, selectedVolee: String?, modalites: [Modalite], selectedOption: String?) -> [CourseSchedule] {
         var scheduleItems: [CourseSchedule] = []
         let rows = worksheet.data?.rows ?? []
         
@@ -425,7 +663,7 @@ class ExcelParser {
         let enseignantCol = columnMap["enseignant"] ?? 10
         let salleCol = columnMap["salle"] ?? 11
         
-        print("📍 Colonnes utilisées: date=\(dateCol), cours=\(coursCol), volée=\(voleeCol), salle=\(salleCol)")
+        print("🔍 Colonnes utilisées: date=\(dateCol), cours=\(coursCol), volée=\(voleeCol), option=\(optionCol), salle=\(salleCol)")
         
         for (index, row) in rows.enumerated() {
             if index < 3 { continue }
@@ -456,6 +694,63 @@ class ExcelParser {
             if !matchesVoleeForExamens(volee: volee, modalite: modalite, option: option, selectedVolee: selectedVolee, selectedModalites: modalites) {
                 continue
             }
+            
+            // ✅ NOUVEAU : Filtrer par option si sélectionnée
+                    if let selectedOption = selectedOption, !selectedOption.isEmpty {
+                        let cleanOption = option.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let lowerCleanOption = cleanOption.lowercased()
+                        
+                        // Si l'option du cours est vide, "Tous", ou "IPS toutes orientations", on l'affiche pour tout le monde
+                        if cleanOption.isEmpty ||
+                           lowerCleanOption.contains("tous") ||
+                           lowerCleanOption.contains("toutes orientations") {
+                            // Ce cours est pour tout le monde, on l'affiche
+                        } else {
+                            // ✅ Séparer les options multiples par "/" ou ","
+                            let separators = CharacterSet(charactersIn: "/,")
+                            let courseOptionParts = cleanOption.components(separatedBy: separators)
+                                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                            
+                            let selectedLower = selectedOption.lowercased()
+                            
+                            // Fonction pour normaliser et comparer
+                            func normalizeAndMatch(_ part: String, _ selected: String) -> Bool {
+                                let lowerPart = part.lowercased()
+                                
+                                // Correspondances directes
+                                if lowerPart == selected || selected.contains(lowerPart) || lowerPart.contains(selected) {
+                                    return true
+                                }
+                                
+                                // Correspondances par équivalence
+                                if selected.contains("primaire") && (lowerPart == "primaires" || lowerPart.contains("primaire")) {
+                                    return true
+                                }
+                                if selected.contains("adulte") && (lowerPart == "adultes" || lowerPart.contains("adulte")) {
+                                    return true
+                                }
+                                if selected.contains("enfant") && (lowerPart == "pédiatriques" || lowerPart == "pediatriques" ||
+                                                                    lowerPart == "pédiatrie" || lowerPart == "pediatrie" ||
+                                                                    lowerPart.contains("enfant")) {
+                                    return true
+                                }
+                                if selected.contains("mentale") && lowerPart.contains("mentale") {
+                                    return true
+                                }
+                                
+                                return false
+                            }
+                            
+                            // Vérifier si l'option sélectionnée correspond à au moins une des options du cours
+                            let matches = courseOptionParts.contains { part in
+                                !part.isEmpty && normalizeAndMatch(part, selectedLower)
+                            }
+                            
+                            if !matches {
+                                continue
+                            }
+                        }
+                    }
             
             var cours = coursRaw.trimmingCharacters(in: .whitespacesAndNewlines)
             
@@ -522,7 +817,6 @@ class ExcelParser {
         print("✅ Total examens créés: \(scheduleItems.count)")
         return scheduleItems
     }
-
     // Nouvelle fonction de matching avec volée + modalités
     private static func matchesVoleeAndModalites(cursus: String, selectedVolee: String, modalites: [Modalite]) -> Bool {
         let cleanCursus = cursus.trimmingCharacters(in: .whitespacesAndNewlines)

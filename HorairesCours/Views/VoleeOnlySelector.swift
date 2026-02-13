@@ -6,6 +6,15 @@ struct VoleeOnlySelector: View {
     @ObservedObject var viewModel: ScheduleViewModel
     @Environment(\.dismiss) private var dismiss
     
+    // ✅ NOUVEAU : Computed property pour les options disponibles de la volée sélectionnée
+    private var availableOptions: [String] {
+        guard let selectedVolee = viewModel.selectedVolee,
+              let options = viewModel.optionsByVolee[selectedVolee] else {
+            return []
+        }
+        return options
+    }
+    
     var body: some View {
         NavigationView {
             ZStack {
@@ -27,7 +36,7 @@ struct VoleeOnlySelector: View {
                             .font(.title)
                             .fontWeight(.bold)
                         
-                        Text("Puis choisissez votre modalité")
+                        Text("Puis choisissez votre modalité et option")
                             .font(.subheadline)
                             .foregroundColor(.gray)
                     }
@@ -71,11 +80,33 @@ struct VoleeOnlySelector: View {
                                     }
                                 }
                                 
+                                // ✅ NOUVEAU : Section Options EN PREMIER (si disponibles)
+                                if !availableOptions.isEmpty {
+                                    Divider()
+                                        .padding(.vertical, 8)
+                                    
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        Text("Option")
+                                            .font(.headline)
+                                            .foregroundColor(.gray)
+                                            .padding(.horizontal)
+                                        
+                                        ForEach(availableOptions, id: \.self) { option in
+                                            OptionRadioButton(
+                                                option: option,
+                                                isSelected: viewModel.selectedOption == option
+                                            ) {
+                                                viewModel.selectedOption = option
+                                            }
+                                        }
+                                    }
+                                }
+                                
                                 // Séparateur
                                 Divider()
                                     .padding(.vertical, 8)
                                 
-                                // Section Modalités
+                                // Section Modalités (APRÈS les options)
                                 VStack(alignment: .leading, spacing: 12) {
                                     Text("Modalité")
                                         .font(.headline)
@@ -143,5 +174,37 @@ struct VoleeOnlySelector: View {
                 }
             }
         }
+    }
+}
+
+// ✅ NOUVEAU : Composant Radio Button pour les options
+struct OptionRadioButton: View {
+    let option: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: isSelected ? "circle.inset.filled" : "circle")
+                    .foregroundColor(isSelected ? .blue : .gray)
+                    .font(.system(size: 24))
+                
+                Text(option)
+                    .font(.system(size: 16, weight: isSelected ? .semibold : .regular))
+                    .foregroundColor(.black)
+                
+                Spacer()
+            }
+            .padding()
+            .background(isSelected ? Color.blue.opacity(0.1) : Color.white)
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+            )
+            .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
+        }
+        .padding(.horizontal)
     }
 }

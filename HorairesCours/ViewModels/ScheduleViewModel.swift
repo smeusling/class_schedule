@@ -8,14 +8,34 @@ class ScheduleViewModel: ObservableObject {
     @Published var schedules: [CourseSchedule] = []
     @Published var courses: [String] = []
     @Published var availableVolees: [String] = []
-    @Published var selectedVolee: String? {
-        didSet {
-            saveVoleePreference()
-        }
-    }
     @Published var selectedModalites: Set<Modalite> = [.tempsPlein, .partiel] {
         didSet {
             saveModalitesPreference()
+        }
+    }
+    @Published var optionsByVolee: [String: [String]] = [:]  // ✅ NOUVEAU
+    @Published var selectedOption: String? {  // ✅ NOUVEAU
+        didSet {
+            saveOptionPreference()
+        }
+    }
+    @Published var selectedVolee: String? {
+        didSet {
+            saveVoleePreference()
+            
+            // ✅ CORRECTION : Ne réinitialiser l'option que si on change vraiment de volée
+            // Pas au premier chargement
+            if oldValue != nil && oldValue != selectedVolee {
+                // La volée a changé (pas juste le chargement initial)
+                if let volee = selectedVolee, let options = optionsByVolee[volee], !options.isEmpty {
+                    // Si l'option actuelle n'est pas valide pour cette volée, réinitialiser
+                    if let current = selectedOption, !options.contains(current) {
+                        selectedOption = nil
+                    }
+                } else {
+                    selectedOption = nil
+                }
+            }
         }
     }
     @Published var selectedCourse: String = ""
@@ -35,6 +55,8 @@ class ScheduleViewModel: ObservableObject {
     // Alertes de mise à jour
     @Published var showUpdateAlert = false
     @Published var updateAlertMessage = ""
+    
+    
     
     private var storageManager: StorageManager?
     
@@ -65,27 +87,29 @@ class ScheduleViewModel: ObservableObject {
     }
     
     func setup(modelContext: ModelContext) {
-        self.storageManager = StorageManager(modelContext: modelContext)
-        self.lastUpdateDate = storageManager?.getLastUpdateDate()
-        
-        loadVoleePreference()
-        loadModalitesPreference()
-        loadDataSourcePreference()
-        
-        print("🔧 Setup - Volée chargée: \(selectedVolee ?? "nil")")
-        print("🔧 Setup - Modalités: \(selectedModalites.map { $0.rawValue })")
-        
-        if selectedVolee == nil {
-            print("⚠️ Pas de volée sélectionnée, affichage de HomeView")
-            showHomeView = true
-        } else {
-            if !showHomeView {
-                Task {
-                    await loadFromCache()
+            self.storageManager = StorageManager(modelContext: modelContext)
+            self.lastUpdateDate = storageManager?.getLastUpdateDate()
+            
+            loadVoleePreference()
+            loadModalitesPreference()
+            loadOptionPreference()  // ✅ NOUVEAU
+            loadDataSourcePreference()
+            
+            print("🔧 Setup - Volée chargée: \(selectedVolee ?? "nil")")
+            print("🔧 Setup - Modalités: \(selectedModalites.map { $0.rawValue })")
+            print("🔧 Setup - Option: \(selectedOption ?? "nil")")  // ✅ NOUVEAU
+            
+            if selectedVolee == nil {
+                print("⚠️ Pas de volée sélectionnée, affichage de HomeView")
+                showHomeView = true
+            } else {
+                if !showHomeView {
+                    Task {
+                        await loadFromCache()
+                    }
                 }
             }
         }
-    }
     
     func loadFromCache() async {
         guard let storageManager = storageManager else {
@@ -212,10 +236,10 @@ class ScheduleViewModel: ObservableObject {
         }
     }
     
-    // ✅ SIMPLIFIÉ : Charger la liste des volées
+    // ✅ SIMPLIFIÉ : Charger la liste des volées ET les options
     func loadCursusList() async {
         isLoading = true
-        print("📄 Chargement de la liste des volées...")
+        print("📄 Chargement de la liste des volées et options...")
         
         do {
             // ✅ CORRECTION : Toujours charger les volées depuis le fichier de semestre
@@ -236,6 +260,18 @@ class ScheduleViewModel: ObservableObject {
             availableVolees = volees
             
             print("✅ Volées disponibles: \(volees)")
+            
+            // ✅ NOUVEAU : Extraire aussi les options par volée
+            let optionsDict = try ExcelParser.extractOptionsForVolees(data)
+            
+            // Convertir Set<String> en [String] trié
+            var optionsArray: [String: [String]] = [:]
+            for (volee, optionsSet) in optionsDict {
+                optionsArray[volee] = optionsSet.sorted()
+            }
+            
+            optionsByVolee = optionsArray
+            print("✅ Options chargées pour \(optionsArray.count) volées")
             
         } catch {
             errorMessage = "Erreur lors du chargement des volées: \(error.localizedDescription)"
@@ -333,7 +369,7 @@ class ScheduleViewModel: ObservableObject {
             print("✅ Fichier téléchargé, parsing en cours...")
             let modalitesArray = Array(selectedModalites)
             
-            let parsed = try ExcelParser.parse(data, selectedVolee: selectedVolee, modalites: modalitesArray, fileType: currentFileType)
+            let parsed = try ExcelParser.parse(data, selectedVolee: selectedVolee, modalites: modalitesArray,selectedOption: selectedOption, fileType: currentFileType)
             
             print("✅ Parsing terminé: \(parsed.count) éléments trouvés")
             
@@ -392,6 +428,7 @@ class ScheduleViewModel: ObservableObject {
         print("📂 Modalités chargées: \(selectedModalites.map { $0.rawValue })")
     }
     
+    
     private func isInCurrentWeek(_ date: Date) -> Bool {
         let calendar = Calendar.current
         
@@ -402,4 +439,15 @@ class ScheduleViewModel: ObservableObject {
         
         return calendar.isDate(selectedWeekStart, equalTo: dateWeekStart, toGranularity: .day)
     }
+    
+    // ✅ NOUVEAU : Sauvegarder/charger l'option
+        private func saveOptionPreference() {
+            UserDefaults.standard.set(selectedOption, forKey: "selectedOption")
+            print("💾 Option sauvegardée: \(selectedOption ?? "nil")")
+        }
+        
+        private func loadOptionPreference() {
+            selectedOption = UserDefaults.standard.string(forKey: "selectedOption")
+            print("📂 Option chargée: \(selectedOption ?? "nil")")
+        }
 }

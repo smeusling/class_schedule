@@ -16,7 +16,7 @@ struct TopBarView: View {
                     .font(.system(size: 20))
             }
             
-            // Volée sélectionnée + Type de source
+            // Volée sélectionnée + Type de source + Option
             if let volee = viewModel.selectedVolee {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(volee)
@@ -24,12 +24,20 @@ struct TopBarView: View {
                         .foregroundColor(.white.opacity(0.8))
                         .lineLimit(1)
                     
+                    // ✅ NOUVEAU : Afficher l'option si elle existe
+                    if let option = viewModel.selectedOption {
+                        Text(option)
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.7))
+                            .lineLimit(1)
+                    }
+                    
                     Text(viewModel.currentSemestreName)
                         .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.6))
                         .lineLimit(1)
                 }
-                .frame(maxWidth: 120)
+                .frame(maxWidth: 150)  // ✅ Augmenté pour avoir plus de place
             }
             
             Spacer()

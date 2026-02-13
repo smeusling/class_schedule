@@ -49,15 +49,48 @@ struct HomeView: View {
                             Button(action: {
                                 viewModel.showCursusSelector = true
                             }) {
-                                HStack(spacing: 12) {
-                                    Text(viewModel.selectedVolee ?? "Choisissez votre volée")
-                                        .foregroundColor(viewModel.selectedVolee == nil ? .gray : .black)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                    
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(.gray)
+                                VStack(spacing: 0) {
+                                    HStack(spacing: 12) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(viewModel.selectedVolee ?? "Choisissez votre volée")
+                                                .foregroundColor(viewModel.selectedVolee == nil ? .gray : .black)
+                                                .font(.system(size: 16, weight: .medium))
+                                            
+                                            // ✅ NOUVEAU : Afficher modalité et option
+                                            if viewModel.selectedVolee != nil {
+                                                HStack(spacing: 8) {
+                                                    // Modalité
+                                                    if !viewModel.selectedModalites.isEmpty {
+                                                        let modaliteText = viewModel.selectedModalites.map { $0.rawValue }.joined(separator: ", ")
+                                                        Text(modaliteText)
+                                                            .font(.system(size: 13))
+                                                            .foregroundColor(.gray)
+                                                    }
+                                                    
+                                                    // Séparateur si modalité ET option
+                                                    if !viewModel.selectedModalites.isEmpty && viewModel.selectedOption != nil {
+                                                        Text("•")
+                                                            .font(.system(size: 13))
+                                                            .foregroundColor(.gray)
+                                                    }
+                                                    
+                                                    // Option
+                                                    if let option = viewModel.selectedOption {
+                                                        Text(option)
+                                                            .font(.system(size: 13))
+                                                            .foregroundColor(.gray)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        Image(systemName: "chevron.right")
+                                            .foregroundColor(.gray)
+                                    }
+                                    .padding()
                                 }
-                                .padding()
                                 .background(Color.white)
                                 .cornerRadius(12)
                                 .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
@@ -166,3 +199,4 @@ struct DataSourceRadioButton: View {
         .padding(.horizontal)
     }
 }
+
