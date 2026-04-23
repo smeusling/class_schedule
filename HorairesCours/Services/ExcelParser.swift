@@ -4,67 +4,50 @@ import Foundation
 import CoreXLSX
 
 class ExcelParser {
-    
-    // Services/ExcelParser.swift
 
-    // ✅ MODIFIER la fonction extractVolees :
+    // MARK: - Extraction des volées
 
     static func extractVolees(_ data: Data) throws -> [String] {
         guard let xlsx = try? XLSXFile(data: data) else {
             throw NSError(domain: "ExcelParsingError", code: -1)
         }
-        
-        var voleesSet = Set<String>()
-        let workbooks = try xlsx.parseWorkbooks()
-        
-        guard let firstWorkbook = workbooks.first else { return [] }
-        
+
+        guard let firstWorkbook = try xlsx.parseWorkbooks().first else { return [] }
         let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: firstWorkbook)
-        
-        // 1️⃣ Essayer d'abord de trouver l'onglet "Menu déroulant" (fichier Automne)
+
+        // Fichier Automne : onglet "Menu déroulant"
         if let menuPath = worksheetPaths.first(where: {
             $0.name!.lowercased().contains("menu") ||
             $0.name!.lowercased().contains("déroulant") ||
             $0.name!.lowercased().contains("deroulant")
         })?.path {
-            
-            print("✅ Onglet 'Menu déroulant' trouvé - extraction depuis Menu déroulant")
             return extractVoleesFromMenuDeroulant(xlsx: xlsx, menuPath: menuPath)
-            
-        } else {
-            // 2️⃣ Sinon, extraire depuis la colonne "Volée" dans l'onglet "Horaire" (fichier Printemps)
-            print("⚠️ Onglet 'Menu déroulant' non trouvé - extraction depuis l'onglet Horaire")
-            
-            guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path else {
-                print("❌ Onglet 'Horaire' non trouvé non plus")
-                return []
-            }
-            
-            return try extractVoleesFromHoraireSheet(xlsx: xlsx, horairePath: horairePath)
         }
+
+        // Fichier Printemps : extraction depuis l'onglet "Horaire"
+        guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path else {
+            return []
+        }
+        return try extractVoleesFromHoraireSheet(xlsx: xlsx, horairePath: horairePath)
     }
 
-    // ✅ NOUVELLE FONCTION : Extraire depuis "Menu déroulant"
     private static func extractVoleesFromMenuDeroulant(xlsx: XLSXFile, menuPath: String) -> [String] {
         var voleesSet = Set<String>()
-        
+
         do {
             let worksheet = try xlsx.parseWorksheet(at: menuPath)
             let rows = worksheet.data?.rows ?? []
             let sharedStrings = try? xlsx.parseSharedStrings()
-            
             var consecutiveNonVoleeCount = 0
-            
-            // Lire uniquement la colonne A (Volée)
+
             for (index, row) in rows.enumerated() {
-                if index == 0 { continue } // Skip l'en-tête "Volée"
-                
+                if index == 0 { continue }
+
                 let cells = row.cells
                 guard let volee = getCellValueOptimized(cells, at: 0, sharedStrings: sharedStrings), !volee.isEmpty else {
                     continue
                 }
-                
-                // Nettoyer : enlever "Temps Plein", "Temps partiel", "Partiel", "Plein", "Tous"
+
                 var cleanedVolee = volee
                     .replacingOccurrences(of: " Temps plein", with: "", options: .caseInsensitive)
                     .replacingOccurrences(of: " Temps Plein", with: "", options: .caseInsensitive)
@@ -75,95 +58,68 @@ class ExcelParser {
                     .replacingOccurrences(of: " Tous", with: "", options: .caseInsensitive)
                     .replacingOccurrences(of: " (8 semestres)", with: "", options: .caseInsensitive)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                
-                // Vérifier si c'est une vraie volée (commence par ICLS, IPS, MScIPS, ou Etudiants)
+
                 let lowercased = cleanedVolee.lowercased()
                 let startsWithValidPrefix = lowercased.hasPrefix("icls") ||
                                            lowercased.hasPrefix("ips") ||
                                            lowercased.hasPrefix("mscips") ||
                                            lowercased.hasPrefix("etudiants")
-                
-                // Si ce n'est pas une volée, on compte
+
                 if !startsWithValidPrefix {
                     consecutiveNonVoleeCount += 1
-                    // Si on a 3 lignes consécutives qui ne sont pas des volées, on arrête
-                    if consecutiveNonVoleeCount >= 3 {
-                        print("🛑 Arrêt de la lecture - fin de la section des volées")
-                        break
-                    }
+                    if consecutiveNonVoleeCount >= 3 { break }
                     continue
                 }
-                
-                // Réinitialiser le compteur si on trouve une volée
+
                 consecutiveNonVoleeCount = 0
-                
-                // Gérer les cursus multiples séparés par "/"
+
                 let parts = cleanedVolee.components(separatedBy: "/")
                 for part in parts {
                     let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
                     let partLowercased = trimmed.lowercased()
-                    
-                    // Vérifier que cette partie est aussi une vraie volée
+
                     let partIsValid = partLowercased.hasPrefix("icls") ||
-                                    partLowercased.hasPrefix("ips") ||
-                                    partLowercased.hasPrefix("mscips") ||
-                                    partLowercased.hasPrefix("etudiants")
-                    
+                                     partLowercased.hasPrefix("ips") ||
+                                     partLowercased.hasPrefix("mscips") ||
+                                     partLowercased.hasPrefix("etudiants")
+
                     if partIsValid && trimmed.count >= 3 {
-                        // Nettoyer les préfixes de chiffres seuls (comme "7 IPS 7-24" -> "IPS 7-24")
                         var finalTrimmed = trimmed
-                        
                         let components = trimmed.components(separatedBy: " ")
-                        if components.count > 1, let firstComponent = components.first, firstComponent.allSatisfy({ $0.isNumber }) {
+                        if components.count > 1, let first = components.first, first.allSatisfy({ $0.isNumber }) {
                             finalTrimmed = components.dropFirst().joined(separator: " ")
                         }
-                        
                         voleesSet.insert(finalTrimmed)
-                        print("🎓 Volée trouvée: '\(finalTrimmed)'")
                     }
                 }
             }
-            
-            let sortedVolees = Array(voleesSet).sorted()
-            print("✅ Total volées extraites: \(sortedVolees.count)")
-            print("📋 Liste finale: \(sortedVolees)")
-            
-            return sortedVolees
-            
+
         } catch {
-            print("❌ Erreur lors de l'extraction depuis Menu déroulant: \(error)")
-            return []
+            print("❌ Erreur extraction Menu déroulant: \(error)")
         }
+
+        return Array(voleesSet).sorted()
     }
 
-    // ✅ NOUVELLE FONCTION : Extraire depuis l'onglet "Horaire"
     private static func extractVoleesFromHoraireSheet(xlsx: XLSXFile, horairePath: String) throws -> [String] {
         var voleesSet = Set<String>()
-        
+
         let worksheet = try xlsx.parseWorksheet(at: horairePath)
         let rows = worksheet.data?.rows ?? []
         let sharedStrings = try? xlsx.parseSharedStrings()
-        
-        print("📊 Parsing de l'onglet Horaire - \(rows.count) lignes...")
-        
-        // Trouver la colonne "Volée"
+
         guard let voleeCol = findColumnIndex(in: rows, sharedStrings: sharedStrings, columnName: "volée") else {
-            print("❌ Colonne 'Volée' non trouvée")
             return []
         }
-        
-        print("✅ Colonne 'Volée' trouvée à l'index \(voleeCol)")
-        
-        // Parcourir toutes les lignes et extraire les volées uniques
+
         for (index, row) in rows.enumerated() {
-            if index < 3 { continue } // Skip les en-têtes
-            
+            if index < 3 { continue }
+
             let cells = row.cells
             guard let volee = getCellValueOptimized(cells, at: voleeCol, sharedStrings: sharedStrings), !volee.isEmpty else {
                 continue
             }
-            
-            // Nettoyer la volée (enlever "Tous", "Temps Plein", "Temps Partiel", etc.)
+
             var cleanedVolee = volee
                 .replacingOccurrences(of: " Tous", with: "", options: .caseInsensitive)
                 .replacingOccurrences(of: " Temps plein", with: "", options: .caseInsensitive)
@@ -173,82 +129,68 @@ class ExcelParser {
                 .replacingOccurrences(of: " Partiel", with: "", options: .caseInsensitive)
                 .replacingOccurrences(of: " Plein", with: "", options: .caseInsensitive)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            // Gérer les cursus multiples séparés par "/"
+
             let parts = cleanedVolee.components(separatedBy: "/")
             for part in parts {
                 let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
                 let partLowercased = trimmed.lowercased()
-                
-                // Vérifier que cette partie est aussi une vraie volée
+
                 let isValidVolee = partLowercased.hasPrefix("icls") ||
-                                  partLowercased.hasPrefix("ips") ||
-                                  partLowercased.hasPrefix("mscips") ||
-                                  partLowercased.hasPrefix("etudiants")
-                
+                                   partLowercased.hasPrefix("ips") ||
+                                   partLowercased.hasPrefix("mscips") ||
+                                   partLowercased.hasPrefix("etudiants")
+
                 if isValidVolee && trimmed.count >= 3 {
-                    voleesSet.insert(trimmed)
+                    if trimmed.lowercased().contains("toutes orientations") { continue }
+
+                    var normalized = trimmed
+                    if normalized.hasPrefix("IPS-") {
+                        normalized = "IPS " + String(normalized.dropFirst(4))
+                    }
+                    voleesSet.insert(normalized)
                 }
             }
         }
-        
-        let sortedVolees = Array(voleesSet).sorted()
-        print("✅ Total volées extraites: \(sortedVolees.count)")
-        print("📋 Liste finale: \(sortedVolees)")
-        
-        return sortedVolees
+
+        return Array(voleesSet).sorted()
     }
-    
-    // ✅ NOUVELLE FONCTION : Extraire les options disponibles par volée
+
+    // MARK: - Extraction des options par volée
+
     static func extractOptionsForVolees(_ data: Data) throws -> [String: Set<String>] {
         guard let xlsx = try? XLSXFile(data: data) else {
             throw NSError(domain: "ExcelParsingError", code: -1)
         }
-        
+
         var optionsByVolee: [String: Set<String>] = [:]
-        
+
         guard let firstWorkbook = try xlsx.parseWorkbooks().first else { return [:] }
-        
         let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: firstWorkbook)
-        
+
         guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path else {
             return [:]
         }
-        
+
         let worksheet = try xlsx.parseWorksheet(at: horairePath)
         let rows = worksheet.data?.rows ?? []
         let sharedStrings = try? xlsx.parseSharedStrings()
-        
-        print("📊 Extraction des options par volée...")
-        
-        // Trouver les colonnes nécessaires
+
         let columnMap = buildColumnMap(rows: rows, sharedStrings: sharedStrings, fileType: .cours)
-        
-        guard let cursusCol = columnMap["cursus"],
-              let optionCol = columnMap["option"] else {
-            print("❌ Colonnes 'cursus' ou 'option' non trouvées")
+
+        guard let cursusCol = columnMap["cursus"], let optionCol = columnMap["option"] else {
             return [:]
         }
-        
-        print("✅ Colonnes trouvées: cursus=\(cursusCol), option=\(optionCol)")
-        
-        // Parcourir toutes les lignes
+
         for (index, row) in rows.enumerated() {
-            if index < 3 { continue } // Skip les en-têtes
-            
+            if index < 3 { continue }
+
             let cells = row.cells
-            
-            guard let cursus = getCellValueOptimized(cells, at: cursusCol, sharedStrings: sharedStrings),
-                  !cursus.isEmpty else {
+
+            guard let cursus = getCellValueOptimized(cells, at: cursusCol, sharedStrings: sharedStrings), !cursus.isEmpty,
+                  let option = getCellValueOptimized(cells, at: optionCol, sharedStrings: sharedStrings), !option.isEmpty else {
                 continue
             }
-            
-            guard let option = getCellValueOptimized(cells, at: optionCol, sharedStrings: sharedStrings),
-                  !option.isEmpty else {
-                continue
-            }
-            
-            // Nettoyer le cursus (enlever modalités)
+
             let cleanedCursus = cursus
                 .replacingOccurrences(of: " Temps plein", with: "", options: .caseInsensitive)
                 .replacingOccurrences(of: " Temps Plein", with: "", options: .caseInsensitive)
@@ -258,88 +200,63 @@ class ExcelParser {
                 .replacingOccurrences(of: " Plein", with: "", options: .caseInsensitive)
                 .replacingOccurrences(of: " Tous", with: "", options: .caseInsensitive)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            // Séparer les volées multiples
-            let volees = cleanedCursus.components(separatedBy: "/")
-            
-            for volee in volees {
+
+            for volee in cleanedCursus.components(separatedBy: "/") {
                 let trimmedVolee = volee.trimmingCharacters(in: .whitespacesAndNewlines)
-                
-                // Vérifier que c'est une vraie volée
                 let lowercased = trimmedVolee.lowercased()
-                let isValid = lowercased.hasPrefix("icls") ||
-                             lowercased.hasPrefix("ips") ||
-                             lowercased.hasPrefix("mscips") ||
-                             lowercased.hasPrefix("etudiants")
-                
-                if isValid && trimmedVolee.count >= 3 {
-                                // Initialiser le Set si nécessaire
-                                if optionsByVolee[trimmedVolee] == nil {
-                                    optionsByVolee[trimmedVolee] = Set<String>()
-                                }
-                                
-                                // ✅ Nettoyer et séparer l'option
-                                let cleanedOption = option.trimmingCharacters(in: .whitespacesAndNewlines)
-                                
-                                // ✅ Filtrer les options à ignorer
-                                let lowerOption = cleanedOption.lowercased()
-                                if lowerOption.contains("tous") ||
-                                   lowerOption.contains("toutes orientations") ||
-                                   cleanedOption.isEmpty {
-                                    // Ne pas ajouter ces options
-                                    continue
-                                }
-                                
-                                // ✅ Séparer d'abord les options multiples avec "/" ou ","
-                                let separators = CharacterSet(charactersIn: "/,")
-                                let optionParts = cleanedOption.components(separatedBy: separators)
-                                
-                                for part in optionParts {
-                                    let trimmedPart = part.trimmingCharacters(in: .whitespacesAndNewlines)
-                                    if trimmedPart.isEmpty || trimmedPart.count <= 2 {
-                                        continue
-                                    }
-                                    
-                                    // ✅ Normaliser chaque partie individuellement
-                                    var normalizedPart = trimmedPart
-                                    let lowerPart = trimmedPart.lowercased()
-                                    
-                                    // Mapper les variations vers les noms standards
-                                    if lowerPart == "primaires" || lowerPart == "soins primaires" {
-                                        normalizedPart = "Soins primaires"
-                                    } else if lowerPart == "adultes" || lowerPart == "soins aux adultes" {
-                                        normalizedPart = "Soins aux adultes"
-                                    } else if lowerPart == "pédiatriques" || lowerPart == "pediatriques" ||
-                                              lowerPart == "pédiatrie" || lowerPart == "pediatrie" ||
-                                              lowerPart == "soins aux enfants" {
-                                        normalizedPart = "Soins aux enfants"
-                                    } else if lowerPart == "santé mentale" {
-                                        normalizedPart = "Santé mentale"
-                                    } else if lowerPart == "option clinique" {
-                                        normalizedPart = "Option clinique"
-                                    } else if lowerPart == "option recherche" {
-                                        normalizedPart = "Option recherche"
-                                    }
-                                    // Sinon, garder le nom tel quel (première lettre en majuscule)
-                                    else if !normalizedPart.isEmpty {
-                                        normalizedPart = normalizedPart.prefix(1).uppercased() + normalizedPart.dropFirst()
-                                    }
-                                    
-                                    optionsByVolee[trimmedVolee]?.insert(normalizedPart)
-                                }
-                            }
+
+                let isValid = lowercased.hasPrefix("icls") || lowercased.hasPrefix("ips") ||
+                              lowercased.hasPrefix("mscips") || lowercased.hasPrefix("etudiants")
+
+                guard isValid && trimmedVolee.count >= 3 else { continue }
+
+                if optionsByVolee[trimmedVolee] == nil {
+                    optionsByVolee[trimmedVolee] = Set<String>()
+                }
+
+                let cleanedOption = option.trimmingCharacters(in: .whitespacesAndNewlines)
+                let lowerOption = cleanedOption.lowercased()
+
+                if lowerOption.contains("tous") || lowerOption.contains("toutes orientations") || cleanedOption.isEmpty {
+                    continue
+                }
+
+                let separators = CharacterSet(charactersIn: "/,")
+                for part in cleanedOption.components(separatedBy: separators) {
+                    let trimmedPart = part.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmedPart.isEmpty || trimmedPart.count <= 2 { continue }
+
+                    let lowerPart = trimmedPart.lowercased()
+                    var normalizedPart: String
+
+                    if lowerPart == "primaires" || lowerPart == "soins primaires" {
+                        normalizedPart = "Soins primaires"
+                    } else if lowerPart == "adultes" || lowerPart == "soins aux adultes" {
+                        normalizedPart = "Soins aux adultes"
+                    } else if lowerPart == "pédiatriques" || lowerPart == "pediatriques" ||
+                              lowerPart == "pédiatrie" || lowerPart == "pediatrie" ||
+                              lowerPart == "soins aux enfants" {
+                        normalizedPart = "Soins aux enfants"
+                    } else if lowerPart == "santé mentale" {
+                        normalizedPart = "Santé mentale"
+                    } else if lowerPart == "option clinique" {
+                        normalizedPart = "Option clinique"
+                    } else if lowerPart == "option recherche" {
+                        normalizedPart = "Option recherche"
+                    } else {
+                        normalizedPart = trimmedPart.prefix(1).uppercased() + trimmedPart.dropFirst()
+                    }
+
+                    optionsByVolee[trimmedVolee]?.insert(normalizedPart)
+                }
             }
         }
-        
-        // Afficher les résultats
-        for (volee, options) in optionsByVolee.sorted(by: { $0.key < $1.key }) {
-            print("🎯 \(volee): \(options.sorted().joined(separator: ", "))")
-        }
-        
+
         return optionsByVolee
     }
-    
-    // Parser avec filtre de volée ET modalités ET option ET type de fichier
+
+    // MARK: - Point d'entrée principal
+
     static func parse(_ data: Data, selectedVolee: String?, modalites: [Modalite], selectedOption: String?, fileType: FileType) throws -> [CourseSchedule] {
         switch fileType {
         case .cours:
@@ -348,276 +265,141 @@ class ExcelParser {
             return try parseExamensSchedule(data, selectedVolee: selectedVolee, modalites: modalites, selectedOption: selectedOption)
         }
     }
-    
-    // MARK: - Fonctions utilitaires pour trouver les colonnes par nom
-    
+
+    // MARK: - Utilitaires colonnes
+
     private static func findColumnIndex(in rows: [Row], sharedStrings: SharedStrings?, columnName: String) -> Int? {
-        // Chercher dans les 3 premières lignes (souvent l'en-tête est en ligne 1 ou 2)
+        let cleanSearch = columnName.lowercased()
+
+        // Correspondance exacte en priorité
         for row in rows.prefix(3) {
-            let cells = row.cells
-            
-            for (index, _) in cells.enumerated() {
-                if let value = getCellValueOptimized(cells, at: index, sharedStrings: sharedStrings) {
-                    let cleanValue = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                    let cleanSearch = columnName.lowercased()
-                    
-                    // ✅ CORRECTION : Chercher une correspondance EXACTE d'abord
-                    if cleanValue == cleanSearch {
-                        print("✅ Colonne '\(columnName)' trouvée à l'index \(index) (valeur: '\(value)') - EXACT MATCH")
+            for (index, _) in row.cells.enumerated() {
+                if let value = getCellValueOptimized(row.cells, at: index, sharedStrings: sharedStrings) {
+                    if value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == cleanSearch {
                         return index
                     }
                 }
             }
         }
-        
-        // ✅ Si pas de match exact, chercher si ça contient (fallback)
+
+        // Correspondance partielle en fallback
         for row in rows.prefix(3) {
-            let cells = row.cells
-            
-            for (index, _) in cells.enumerated() {
-                if let value = getCellValueOptimized(cells, at: index, sharedStrings: sharedStrings) {
-                    let cleanValue = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                    let cleanSearch = columnName.lowercased()
-                    
-                    if cleanValue.contains(cleanSearch) {
-                        print("✅ Colonne '\(columnName)' trouvée à l'index \(index) (valeur: '\(value)') - PARTIAL MATCH")
+            for (index, _) in row.cells.enumerated() {
+                if let value = getCellValueOptimized(row.cells, at: index, sharedStrings: sharedStrings) {
+                    if value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().contains(cleanSearch) {
                         return index
                     }
                 }
             }
         }
-        
-        print("⚠️ Colonne '\(columnName)' non trouvée")
+
         return nil
     }
-    
+
     private static func buildColumnMap(rows: [Row], sharedStrings: SharedStrings?, fileType: FileType) -> [String: Int] {
         var columnMap: [String: Int] = [:]
-        
-        let columnsToFind: [String]
-        if fileType == .cours {
-            columnsToFind = ["date", "heure début", "heure fin", "nombre période", "contenu", "option", "enseignant", "salle"]
-        } else {
-            columnsToFind = ["date", "arrivée", "heure début", "heure fin", "cours", "modalité", "anonymisation", "volée", "option", "enseignant", "salle"]
-        }
-        
-        print("🔍 Recherche des colonnes pour type: \(fileType.rawValue)")
-        
+
+        let columnsToFind: [String] = fileType == .cours
+            ? ["date", "heure début", "heure fin", "nombre période", "contenu", "option", "enseignant", "salle"]
+            : ["date", "arrivée", "heure début", "heure fin", "cours", "modalité", "anonymisation", "volée", "option", "enseignant", "salle"]
+
         for columnName in columnsToFind {
             if let index = findColumnIndex(in: rows, sharedStrings: sharedStrings, columnName: columnName) {
                 columnMap[columnName] = index
             }
         }
-        
-        // ✅ SPÉCIAL : Pour le fichier cours, déduire les colonnes sans titre
+
         if fileType == .cours {
-            // La colonne "Cours" (sans titre) est juste AVANT "Contenu du cours"
-            if let contenuIndex = columnMap["contenu"] {
-                let coursIndex = contenuIndex - 1
-                columnMap["cours"] = coursIndex
-                print("✅ Colonne 'cours' déduite à l'index \(coursIndex) (juste avant Contenu)")
+            // La colonne "Cours" n'a pas de titre : elle est juste avant "Contenu"
+            if columnMap["cours"] == nil, let contenuIndex = columnMap["contenu"] {
+                columnMap["cours"] = contenuIndex - 1
             }
-            
-            // La colonne "Cursus" (sans titre) est juste AVANT "Option"
+            // La colonne "Cursus" n'a pas de titre : elle est juste avant "Option"
             if let optionIndex = columnMap["option"] {
-                let cursusIndex = optionIndex - 1
-                columnMap["cursus"] = cursusIndex
-                print("✅ Colonne 'cursus' déduite à l'index \(cursusIndex) (juste avant Option)")
+                columnMap["cursus"] = optionIndex - 1
             }
-        } else {
-            // Pour les examens, cursus n'existe pas, on garde "cours" tel quel
         }
-        
-        print("📋 Mapping des colonnes: \(columnMap)")
+
         return columnMap
     }
-    
-    // Parser pour les horaires de cours
+
+    // MARK: - Parsing cours
+
     private static func parseCoursSchedule(_ data: Data, selectedVolee: String?, modalites: [Modalite], selectedOption: String?) throws -> [CourseSchedule] {
         guard let xlsx = try? XLSXFile(data: data) else {
             throw NSError(domain: "ExcelParsingError", code: -1)
         }
-        
-        var scheduleItems: [CourseSchedule] = []
-        let colors = ScheduleColor.allCases
+
         var colorIndex = 0
-        
+        let colors = ScheduleColor.allCases
+
         guard let firstWorkbook = try xlsx.parseWorkbooks().first else { return [] }
-        
         let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: firstWorkbook)
-        
+
         guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path
               ?? worksheetPaths.first?.path else { return [] }
-        
+
         let worksheet = try xlsx.parseWorksheet(at: horairePath)
         let sharedStrings = try? xlsx.parseSharedStrings()
-        
-        scheduleItems = parseCoursWorksheetDynamic(worksheet, sharedStrings: sharedStrings, colors: colors, colorIndex: &colorIndex, selectedVolee: selectedVolee, modalites: modalites, selectedOption: selectedOption)
-        
-        return scheduleItems.sorted { $0.date < $1.date }
+
+        let items = parseCoursWorksheetDynamic(worksheet, sharedStrings: sharedStrings, colors: colors, colorIndex: &colorIndex, selectedVolee: selectedVolee, modalites: modalites, selectedOption: selectedOption)
+        return items.sorted { $0.date < $1.date }
     }
-    
-    // NOUVEAU : Parser pour les horaires d'examens
-    private static func parseExamensSchedule(_ data: Data, selectedVolee: String?, modalites: [Modalite], selectedOption: String?) throws -> [CourseSchedule] {
-        guard let xlsx = try? XLSXFile(data: data) else {
-            throw NSError(domain: "ExcelParsingError", code: -1)
-        }
-        
-        var scheduleItems: [CourseSchedule] = []
-        let colors = ScheduleColor.allCases
-        var colorIndex = 0
-        
-        guard let firstWorkbook = try xlsx.parseWorkbooks().first else { return [] }
-        
-        let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: firstWorkbook)
-        
-        guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path
-              ?? worksheetPaths.first?.path else { return [] }
-        
-        let worksheet = try xlsx.parseWorksheet(at: horairePath)
-        let sharedStrings = try? xlsx.parseSharedStrings()
-        
-        scheduleItems = parseExamensWorksheetDynamic(worksheet, sharedStrings: sharedStrings, colors: colors, colorIndex: &colorIndex, selectedVolee: selectedVolee, modalites: modalites, selectedOption: selectedOption)
-        
-        return scheduleItems.sorted { $0.date < $1.date }
-    }
-    
+
     private static func parseCoursWorksheetDynamic(_ worksheet: Worksheet, sharedStrings: SharedStrings?, colors: [ScheduleColor], colorIndex: inout Int, selectedVolee: String?, modalites: [Modalite], selectedOption: String?) -> [CourseSchedule] {
         var scheduleItems: [CourseSchedule] = []
         let rows = worksheet.data?.rows ?? []
-        
-        print("📊 Parsing \(rows.count) lignes...")
-        
-        // ✅ NOUVEAU : Construire le mapping des colonnes
         let columnMap = buildColumnMap(rows: rows, sharedStrings: sharedStrings, fileType: .cours)
-        
-        // Vérifier qu'on a les colonnes essentielles
-        guard let dateCol = columnMap["date"],
-              let coursCol = columnMap["cours"] else {
-            print("❌ Colonnes essentielles manquantes (date ou cours)")
+
+        guard let dateCol = columnMap["date"], let coursCol = columnMap["cours"] else {
             return []
         }
-        
-        // Colonnes optionnelles avec fallback
-        let heureDebutCol = columnMap["heure début"] ?? columnMap["heure debut"] ?? 2
-        let heureFinCol = columnMap["heure fin"] ?? 3
-        let nombrePeriodeCol = columnMap["nombre période"] ?? columnMap["nombre periode"] ?? 4
-        let contenuCol = columnMap["contenu"] ?? columnMap["contenu du cours"] ?? 6
-        let cursusCol = columnMap["cursus"] ?? 7
-        let optionCol = columnMap["option"] ?? 8
-        let enseignantCol = columnMap["enseignant"] ?? 9
-        let salleCol = columnMap["salle"] ?? 10
-        
-        print("🔍 Colonnes utilisées: date=\(dateCol), cours=\(coursCol), cursus=\(cursusCol), option=\(optionCol), salle=\(salleCol), enseignant=\(enseignantCol)")
-        
+
+        let heureDebutCol   = columnMap["heure début"] ?? 2
+        let heureFinCol     = columnMap["heure fin"] ?? 3
+        let nombrePeriodeCol = columnMap["nombre période"] ?? 4
+        let contenuCol      = columnMap["contenu"] ?? 6
+        let cursusCol       = columnMap["cursus"] ?? 7
+        let optionCol       = columnMap["option"] ?? 8
+        let enseignantCol   = columnMap["enseignant"] ?? 9
+        let salleCol        = columnMap["salle"] ?? 10
+
+        var lastValidDateStr = ""
+
         for (index, row) in rows.enumerated() {
             if index < 2 { continue }
-            
+
             let cells = row.cells
-            
-            let dateStr = getDateCellValue(cells, at: dateCol, sharedStrings: sharedStrings) ?? ""
-            let heureDebut = getCellValueOptimized(cells, at: heureDebutCol, sharedStrings: sharedStrings) ?? ""
-            let heureFin = getCellValueOptimized(cells, at: heureFinCol, sharedStrings: sharedStrings) ?? ""
+
+            // Gestion des cellules de date fusionnées : réutiliser la dernière date valide
+            var dateStr = getDateCellValue(cells, at: dateCol, sharedStrings: sharedStrings) ?? ""
+            if dateStr.isEmpty { dateStr = lastValidDateStr } else { lastValidDateStr = dateStr }
+
+            let heureDebut    = getCellValueOptimized(cells, at: heureDebutCol, sharedStrings: sharedStrings) ?? ""
+            let heureFin      = getCellValueOptimized(cells, at: heureFinCol, sharedStrings: sharedStrings) ?? ""
             let nombrePeriode = getCellValueOptimized(cells, at: nombrePeriodeCol, sharedStrings: sharedStrings) ?? ""
-            let cours = getCellValueOptimized(cells, at: coursCol, sharedStrings: sharedStrings) ?? ""
-            let contenuCours = getCellValueOptimized(cells, at: contenuCol, sharedStrings: sharedStrings) ?? ""
-            let cursus = getCellValueOptimized(cells, at: cursusCol, sharedStrings: sharedStrings) ?? ""
-            let option = getCellValueOptimized(cells, at: optionCol, sharedStrings: sharedStrings) ?? ""
-            let enseignant = getCellValueOptimized(cells, at: enseignantCol, sharedStrings: sharedStrings) ?? ""
-            
-            // ✅ Nettoyer les erreurs Excel
+            let cours         = getCellValueOptimized(cells, at: coursCol, sharedStrings: sharedStrings) ?? ""
+            let contenuCours  = getCellValueOptimized(cells, at: contenuCol, sharedStrings: sharedStrings) ?? ""
+            let cursus        = getCellValueOptimized(cells, at: cursusCol, sharedStrings: sharedStrings) ?? ""
+            let option        = getCellValueOptimized(cells, at: optionCol, sharedStrings: sharedStrings) ?? ""
+            let enseignant    = getCellValueOptimized(cells, at: enseignantCol, sharedStrings: sharedStrings) ?? ""
+
             var salle = getCellValueOptimized(cells, at: salleCol, sharedStrings: sharedStrings) ?? ""
-            
-            if salle == "#REF!" || salle == "#N/A" || salle == "#VALUE!" || salle == "#DIV/0!" || salle == "#NAME?" || salle == "0" {
-                salle = ""
-            }
-            
-            // Filtrer par volée ET modalités
+            if ["#REF!", "#N/A", "#VALUE!", "#DIV/0!", "#NAME?", "0"].contains(salle) { salle = "" }
+
             if let selectedVolee = selectedVolee {
-                if !matchesVoleeAndModalites(cursus: cursus, selectedVolee: selectedVolee, modalites: modalites) {
-                    continue
-                }
+                guard matchesVoleeAndModalites(cursus: cursus, selectedVolee: selectedVolee, modalites: modalites) else { continue }
             }
-            
-            // ✅ NOUVEAU : Filtrer par option si sélectionnée
-                    if let selectedOption = selectedOption, !selectedOption.isEmpty {
-                        let cleanOption = option.trimmingCharacters(in: .whitespacesAndNewlines)
-                        let lowerCleanOption = cleanOption.lowercased()
-                        
-                        // Si l'option du cours est vide, "Tous", ou "IPS toutes orientations", on l'affiche pour tout le monde
-                        if cleanOption.isEmpty ||
-                           lowerCleanOption.contains("tous") ||
-                           lowerCleanOption.contains("toutes orientations") {
-                            // Ce cours est pour tout le monde, on l'affiche
-                            print("✅ Cours accepté (option vide/tous): \(cours)")
-                        } else {
-                            // ✅ Séparer les options multiples par "/" ou ","
-                            let separators = CharacterSet(charactersIn: "/,")
-                            let courseOptionParts = cleanOption.components(separatedBy: separators)
-                                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                            
-                            let selectedLower = selectedOption.lowercased()
-                            
-                            print("🔍 Cours: '\(cours)' - Option cours: '\(cleanOption)' - Parts: \(courseOptionParts)")
-                            print("   Option sélectionnée: '\(selectedOption)'")
-                            
-                            // Fonction pour normaliser et comparer
-                            func normalizeAndMatch(_ part: String, _ selected: String) -> Bool {
-                                let lowerPart = part.lowercased()
-                                
-                                // Correspondances directes
-                                if lowerPart == selected || selected.contains(lowerPart) || lowerPart.contains(selected) {
-                                    print("   ✅ Match direct: '\(part)' <-> '\(selected)'")
-                                    return true
-                                }
-                                
-                                // Correspondances par équivalence
-                                if selected.contains("primaire") && (lowerPart == "primaires" || lowerPart.contains("primaire")) {
-                                    print("   ✅ Match primaires: '\(part)'")
-                                    return true
-                                }
-                                if selected.contains("adulte") && (lowerPart == "adultes" || lowerPart.contains("adulte")) {
-                                    print("   ✅ Match adultes: '\(part)'")
-                                    return true
-                                }
-                                if selected.contains("enfant") && (lowerPart == "pédiatriques" || lowerPart == "pediatriques" ||
-                                                                    lowerPart == "pédiatrie" || lowerPart == "pediatrie" ||
-                                                                    lowerPart.contains("enfant")) {
-                                    print("   ✅ Match enfants: '\(part)'")
-                                    return true
-                                }
-                                if selected.contains("mentale") && lowerPart.contains("mentale") {
-                                    print("   ✅ Match mentale: '\(part)'")
-                                    return true
-                                }
-                                
-                                return false
-                            }
-                            
-                            // Vérifier si l'option sélectionnée correspond à au moins une des options du cours
-                            let matches = courseOptionParts.contains { part in
-                                !part.isEmpty && normalizeAndMatch(part, selectedLower)
-                            }
-                            
-                            if !matches {
-                                print("   ❌ Cours rejeté - aucun match")
-                                continue
-                            } else {
-                                print("   ✅ Cours accepté - match trouvé")
-                            }
-                        }
-                    }
-            
-            guard !cours.isEmpty else { continue }
-            guard let date = parseDate(dateStr) else {
-                continue
+
+            if let selectedOption = selectedOption, !selectedOption.isEmpty {
+                guard matchesOption(courseOption: option, selectedOption: selectedOption) else { continue }
             }
-            
-            let heureComplete = formatHeure(debut: heureDebut, fin: heureFin)
-            
-            let schedule = CourseSchedule(
+
+            guard !cours.isEmpty, let date = parseDate(dateStr) else { continue }
+
+            scheduleItems.append(CourseSchedule(
                 date: date,
-                heure: heureComplete,
+                heure: formatHeure(debut: heureDebut, fin: heureFin),
                 cours: cours,
                 salle: salle,
                 enseignant: enseignant,
@@ -625,181 +407,108 @@ class ExcelParser {
                 color: colors[colorIndex % colors.count],
                 contenuCours: contenuCours,
                 nombrePeriode: nombrePeriode
-            )
-            scheduleItems.append(schedule)
+            ))
             colorIndex += 1
         }
-        
-        print("✅ Total schedules créés: \(scheduleItems.count)")
+
         return scheduleItems
     }
-    
+
+    // MARK: - Parsing examens
+
+    private static func parseExamensSchedule(_ data: Data, selectedVolee: String?, modalites: [Modalite], selectedOption: String?) throws -> [CourseSchedule] {
+        guard let xlsx = try? XLSXFile(data: data) else {
+            throw NSError(domain: "ExcelParsingError", code: -1)
+        }
+
+        var colorIndex = 0
+        let colors = ScheduleColor.allCases
+
+        guard let firstWorkbook = try xlsx.parseWorkbooks().first else { return [] }
+        let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: firstWorkbook)
+
+        guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path
+              ?? worksheetPaths.first?.path else { return [] }
+
+        let worksheet = try xlsx.parseWorksheet(at: horairePath)
+        let sharedStrings = try? xlsx.parseSharedStrings()
+
+        let items = parseExamensWorksheetDynamic(worksheet, sharedStrings: sharedStrings, colors: colors, colorIndex: &colorIndex, selectedVolee: selectedVolee, modalites: modalites, selectedOption: selectedOption)
+        return items.sorted { $0.date < $1.date }
+    }
+
     private static func parseExamensWorksheetDynamic(_ worksheet: Worksheet, sharedStrings: SharedStrings?, colors: [ScheduleColor], colorIndex: inout Int, selectedVolee: String?, modalites: [Modalite], selectedOption: String?) -> [CourseSchedule] {
         var scheduleItems: [CourseSchedule] = []
         let rows = worksheet.data?.rows ?? []
-        
-        print("📊 Parsing examens - \(rows.count) lignes...")
-        
-        // ✅ NOUVEAU : Construire le mapping des colonnes
         let columnMap = buildColumnMap(rows: rows, sharedStrings: sharedStrings, fileType: .examens)
-        
-        // Vérifier qu'on a les colonnes essentielles
-        guard let dateCol = columnMap["date"],
-              let coursCol = columnMap["cours"] else {
-            print("❌ Colonnes essentielles manquantes (date ou cours)")
+
+        guard let dateCol = columnMap["date"], let coursCol = columnMap["cours"] else {
             return []
         }
-        
-        // Pour volée, essayer plusieurs variantes
-        let voleeCol = columnMap["volée"] ?? columnMap["volee"] ?? 8
-        
-        // Colonnes optionnelles avec fallback
-        let arriveeCol = columnMap["arrivée"] ?? columnMap["arrivee"] ?? columnMap["arrivée pour contrôle id"] ?? 2
-        let heureDebutCol = columnMap["heure début"] ?? columnMap["heure debut"] ?? 3
-        let heureFinCol = columnMap["heure fin"] ?? 4
-        let modaliteCol = columnMap["modalité"] ?? columnMap["modalite"] ?? 6
+
+        let voleeCol         = columnMap["volée"] ?? 8
+        let arriveeCol       = columnMap["arrivée"] ?? 2
+        let heureDebutCol    = columnMap["heure début"] ?? 3
+        let heureFinCol      = columnMap["heure fin"] ?? 4
+        let modaliteCol      = columnMap["modalité"] ?? 6
         let anonymisationCol = columnMap["anonymisation"] ?? 7
-        let optionCol = columnMap["option"] ?? 9
-        let enseignantCol = columnMap["enseignant"] ?? 10
-        let salleCol = columnMap["salle"] ?? 11
-        
-        print("🔍 Colonnes utilisées: date=\(dateCol), cours=\(coursCol), volée=\(voleeCol), option=\(optionCol), salle=\(salleCol)")
-        
+        let optionCol        = columnMap["option"] ?? 9
+        let enseignantCol    = columnMap["enseignant"] ?? 10
+        let salleCol         = columnMap["salle"] ?? 11
+
         for (index, row) in rows.enumerated() {
             if index < 3 { continue }
-            
+
             let cells = row.cells
-            
-            let dateStr = getDateCellValue(cells, at: dateCol, sharedStrings: sharedStrings) ?? ""
-            let arriveeControle = getCellValueOptimized(cells, at: arriveeCol, sharedStrings: sharedStrings) ?? ""
-            let heureDebut = getCellValueOptimized(cells, at: heureDebutCol, sharedStrings: sharedStrings) ?? ""
-            let heureFin = getCellValueOptimized(cells, at: heureFinCol, sharedStrings: sharedStrings) ?? ""
-            let coursRaw = getCellValueOptimized(cells, at: coursCol, sharedStrings: sharedStrings) ?? ""
-            let modalite = getCellValueOptimized(cells, at: modaliteCol, sharedStrings: sharedStrings) ?? ""
-            let anonymisation = getCellValueOptimized(cells, at: anonymisationCol, sharedStrings: sharedStrings) ?? ""
-            let volee = getCellValueOptimized(cells, at: voleeCol, sharedStrings: sharedStrings) ?? ""
-            let option = getCellValueOptimized(cells, at: optionCol, sharedStrings: sharedStrings) ?? ""
-            let enseignant = getCellValueOptimized(cells, at: enseignantCol, sharedStrings: sharedStrings) ?? ""
-            
-            // ✅ Nettoyer les erreurs Excel pour la salle
+
+            let dateStr          = getDateCellValue(cells, at: dateCol, sharedStrings: sharedStrings) ?? ""
+            let arriveeControle  = getCellValueOptimized(cells, at: arriveeCol, sharedStrings: sharedStrings) ?? ""
+            let heureDebut       = getCellValueOptimized(cells, at: heureDebutCol, sharedStrings: sharedStrings) ?? ""
+            let heureFin         = getCellValueOptimized(cells, at: heureFinCol, sharedStrings: sharedStrings) ?? ""
+            let coursRaw         = getCellValueOptimized(cells, at: coursCol, sharedStrings: sharedStrings) ?? ""
+            let modalite         = getCellValueOptimized(cells, at: modaliteCol, sharedStrings: sharedStrings) ?? ""
+            let anonymisation    = getCellValueOptimized(cells, at: anonymisationCol, sharedStrings: sharedStrings) ?? ""
+            let volee            = getCellValueOptimized(cells, at: voleeCol, sharedStrings: sharedStrings) ?? ""
+            let option           = getCellValueOptimized(cells, at: optionCol, sharedStrings: sharedStrings) ?? ""
+            let enseignant       = getCellValueOptimized(cells, at: enseignantCol, sharedStrings: sharedStrings) ?? ""
+
             var salle = getCellValueOptimized(cells, at: salleCol, sharedStrings: sharedStrings) ?? ""
-            
-            if salle == "#REF!" || salle == "#N/A" || salle == "#VALUE!" || salle == "#DIV/0!" || salle == "#NAME?" || salle == "0" {
-                salle = ""
-            }
-            
-            // Filtrer par volée
+            if ["#REF!", "#N/A", "#VALUE!", "#DIV/0!", "#NAME?", "0"].contains(salle) { salle = "" }
+
             guard let selectedVolee = selectedVolee else { continue }
-            
-            if !matchesVoleeForExamens(volee: volee, modalite: modalite, option: option, selectedVolee: selectedVolee, selectedModalites: modalites) {
-                continue
+            guard matchesVoleeForExamens(volee: volee, modalite: modalite, option: option, selectedVolee: selectedVolee, selectedModalites: modalites) else { continue }
+
+            if let selectedOption = selectedOption, !selectedOption.isEmpty {
+                guard matchesOption(courseOption: option, selectedOption: selectedOption) else { continue }
             }
-            
-            // ✅ NOUVEAU : Filtrer par option si sélectionnée
-                    if let selectedOption = selectedOption, !selectedOption.isEmpty {
-                        let cleanOption = option.trimmingCharacters(in: .whitespacesAndNewlines)
-                        let lowerCleanOption = cleanOption.lowercased()
-                        
-                        // Si l'option du cours est vide, "Tous", ou "IPS toutes orientations", on l'affiche pour tout le monde
-                        if cleanOption.isEmpty ||
-                           lowerCleanOption.contains("tous") ||
-                           lowerCleanOption.contains("toutes orientations") {
-                            // Ce cours est pour tout le monde, on l'affiche
-                        } else {
-                            // ✅ Séparer les options multiples par "/" ou ","
-                            let separators = CharacterSet(charactersIn: "/,")
-                            let courseOptionParts = cleanOption.components(separatedBy: separators)
-                                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                            
-                            let selectedLower = selectedOption.lowercased()
-                            
-                            // Fonction pour normaliser et comparer
-                            func normalizeAndMatch(_ part: String, _ selected: String) -> Bool {
-                                let lowerPart = part.lowercased()
-                                
-                                // Correspondances directes
-                                if lowerPart == selected || selected.contains(lowerPart) || lowerPart.contains(selected) {
-                                    return true
-                                }
-                                
-                                // Correspondances par équivalence
-                                if selected.contains("primaire") && (lowerPart == "primaires" || lowerPart.contains("primaire")) {
-                                    return true
-                                }
-                                if selected.contains("adulte") && (lowerPart == "adultes" || lowerPart.contains("adulte")) {
-                                    return true
-                                }
-                                if selected.contains("enfant") && (lowerPart == "pédiatriques" || lowerPart == "pediatriques" ||
-                                                                    lowerPart == "pédiatrie" || lowerPart == "pediatrie" ||
-                                                                    lowerPart.contains("enfant")) {
-                                    return true
-                                }
-                                if selected.contains("mentale") && lowerPart.contains("mentale") {
-                                    return true
-                                }
-                                
-                                return false
-                            }
-                            
-                            // Vérifier si l'option sélectionnée correspond à au moins une des options du cours
-                            let matches = courseOptionParts.contains { part in
-                                !part.isEmpty && normalizeAndMatch(part, selectedLower)
-                            }
-                            
-                            if !matches {
-                                continue
-                            }
-                        }
-                    }
-            
+
             var cours = coursRaw.trimmingCharacters(in: .whitespacesAndNewlines)
-            
             if cours.isEmpty || Int(cours) != nil {
                 cours = "⚠️ Erreur de lecture du fichier Excel"
             }
-            
-            guard let date = parseDate(dateStr) else {
-                continue
-            }
-            
-            // Construire les informations d'horaire
+
+            guard let date = parseDate(dateStr) else { continue }
+
             let heureComplete: String
             if !arriveeControle.isEmpty && arriveeControle != "Ø" {
                 let arriveeFormatted = formatSingleHeureUniform(arriveeControle)
-                
                 if !heureDebut.isEmpty && !heureFin.isEmpty {
-                    let debutFormatted = formatSingleHeureUniform(heureDebut)
-                    let finFormatted = formatSingleHeureUniform(heureFin)
-                    heureComplete = "Arrivée: \(arriveeFormatted) | Examen: \(debutFormatted) - \(finFormatted)"
+                    heureComplete = "Arrivée: \(arriveeFormatted) | Examen: \(formatSingleHeureUniform(heureDebut)) - \(formatSingleHeureUniform(heureFin))"
                 } else {
                     heureComplete = "Arrivée: \(arriveeFormatted)"
                 }
             } else {
-                if !heureDebut.isEmpty && !heureFin.isEmpty {
-                    heureComplete = formatHeure(debut: heureDebut, fin: heureFin)
-                } else {
-                    heureComplete = "Horaire non spécifié"
-                }
+                heureComplete = (!heureDebut.isEmpty && !heureFin.isEmpty)
+                    ? formatHeure(debut: heureDebut, fin: heureFin)
+                    : "Horaire non spécifié"
             }
-            
+
             var contenuExamen = ""
-            if !modalite.isEmpty {
-                contenuExamen = "📝 \(modalite)"
-            }
-            if !anonymisation.isEmpty {
-                if !contenuExamen.isEmpty {
-                    contenuExamen += "\n"
-                }
-                contenuExamen += "🔒 Anonymisation: \(anonymisation)"
-            }
-            if !option.isEmpty {
-                if !contenuExamen.isEmpty {
-                    contenuExamen += "\n"
-                }
-                contenuExamen += "📚 \(option)"
-            }
-            
-            let schedule = CourseSchedule(
+            if !modalite.isEmpty      { contenuExamen += "📝 \(modalite)" }
+            if !anonymisation.isEmpty { contenuExamen += (contenuExamen.isEmpty ? "" : "\n") + "🔒 Anonymisation: \(anonymisation)" }
+            if !option.isEmpty        { contenuExamen += (contenuExamen.isEmpty ? "" : "\n") + "📚 \(option)" }
+
+            scheduleItems.append(CourseSchedule(
                 date: date,
                 heure: heureComplete,
                 cours: cours,
@@ -809,516 +518,315 @@ class ExcelParser {
                 color: colors[colorIndex % colors.count],
                 contenuCours: contenuExamen,
                 nombrePeriode: ""
-            )
-            scheduleItems.append(schedule)
+            ))
             colorIndex += 1
         }
-        
-        print("✅ Total examens créés: \(scheduleItems.count)")
+
         return scheduleItems
     }
-    // Nouvelle fonction de matching avec volée + modalités
+
+    // MARK: - Filtrage volée / modalité / option
+
     private static func matchesVoleeAndModalites(cursus: String, selectedVolee: String, modalites: [Modalite]) -> Bool {
         let cleanCursus = cursus.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanSelected = selectedVolee.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        
-        // ⚠️ Si le cursus est vide, on ne peut pas savoir à qui appartient ce cours
-        if cleanCursus.isEmpty {
-            return false
-        }
-        
-        // Séparer les cursus multiples
-        let cursusList = cleanCursus.components(separatedBy: "/").map { $0.trimmingCharacters(in: .whitespaces) }
-        
-        for singleCursus in cursusList {
-            let lowercaseCursus = singleCursus.lowercased()
-            
-            // Vérifier si la volée correspond
-            if !lowercaseCursus.contains(cleanSelected) {
-                continue
-            }
-            
-            // Si les deux modalités sont cochées OU si "Tous" est présent
-            if modalites.count == 2 || lowercaseCursus.contains("tous") {
-                return true
-            }
-            
-            // Vérifier les modalités spécifiques
+
+        guard !cleanCursus.isEmpty else { return false }
+
+        for singleCursus in cleanCursus.components(separatedBy: "/").map({ $0.trimmingCharacters(in: .whitespaces) }) {
+            let lower = singleCursus.lowercased()
+            guard lower.contains(cleanSelected) else { continue }
+
+            if modalites.count == 2 || lower.contains("tous") { return true }
+
             for modalite in modalites {
                 switch modalite {
                 case .tempsPlein:
-                    if lowercaseCursus.contains("temps plein") || lowercaseCursus.contains("plein") {
-                        return true
-                    }
+                    if lower.contains("temps plein") || lower.contains("plein") { return true }
                 case .partiel:
-                    if lowercaseCursus.contains("partiel") {
-                        return true
-                    }
+                    if lower.contains("partiel") { return true }
                 }
             }
         }
-        
+
         return false
     }
-    
-    // NOUVEAU : Fonction de matching pour les examens
+
     private static func matchesVoleeForExamens(volee: String, modalite: String, option: String, selectedVolee: String, selectedModalites: [Modalite]) -> Bool {
-        let cleanVolee = volee.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let cleanVolee    = volee.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let cleanSelected = selectedVolee.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let cleanModalite = modalite.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let cleanOption = option.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        
-        // Si pas de volée spécifiée dans l'examen, ne pas l'accepter
-        if cleanVolee.isEmpty {
-            return false
-        }
-        
-        // Gérer les volées multiples séparées par "/" ou ","
-        let voleeParts = cleanVolee.components(separatedBy: CharacterSet(charactersIn: "/,")).map { $0.trimmingCharacters(in: .whitespaces) }
-        
-        var voleeMatches = false
-        for voleePart in voleeParts {
-            if voleePart.contains(cleanSelected) {
-                voleeMatches = true
-                break
-            }
-        }
-        
-        // Si la volée ne correspond pas, rejeter
-        if !voleeMatches {
-            return false
-        }
-        
-        // Si l'option est "Toutes orientations", accepter pour toutes les modalités
-        if cleanOption.contains("toutes orientations") {
-            return true
-        }
-        
-        // Si les deux modalités sont sélectionnées, accepter
-        if selectedModalites.count == 2 {
-            return true
-        }
-        
-        // Vérifier les modalités spécifiques
+        let cleanOption   = option.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        guard !cleanVolee.isEmpty else { return false }
+
+        let voleeMatches = cleanVolee.components(separatedBy: CharacterSet(charactersIn: "/,"))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .contains { $0.contains(cleanSelected) }
+
+        guard voleeMatches else { return false }
+
+        if cleanOption.contains("toutes orientations") || selectedModalites.count == 2 { return true }
+
         for selectedModalite in selectedModalites {
             switch selectedModalite {
             case .tempsPlein:
-                // Chercher "Temps Plein" ou "Plein" dans la volée ou la modalité
                 if cleanVolee.contains("temps plein") || cleanVolee.contains("plein") ||
-                   cleanModalite.contains("temps plein") || cleanModalite.contains("plein") {
-                    return true
-                }
+                   cleanModalite.contains("temps plein") || cleanModalite.contains("plein") { return true }
             case .partiel:
-                // Chercher "Partiel" dans la volée ou la modalité
-                if cleanVolee.contains("partiel") || cleanModalite.contains("partiel") {
-                    return true
-                }
+                if cleanVolee.contains("partiel") || cleanModalite.contains("partiel") { return true }
             }
         }
-        
-        // Si aucune modalité n'est spécifiée dans l'examen, l'accepter par défaut
-        if cleanModalite.isEmpty && !cleanVolee.contains("temps plein") && !cleanVolee.contains("plein") && !cleanVolee.contains("partiel") {
-            return true
-        }
-        
+
+        // Pas de modalité spécifiée dans l'examen : accepter par défaut
+        if cleanModalite.isEmpty && !cleanVolee.contains("temps plein") &&
+           !cleanVolee.contains("plein") && !cleanVolee.contains("partiel") { return true }
+
         return false
     }
-    
-    private static func getCellValueOptimized(_ cells: [Cell], at index: Int, sharedStrings: SharedStrings?) -> String? {
-        guard index < cells.count else { return nil }
-        let cell = cells[index]
-        
-        // ✅ Essayer la méthode standard d'abord
-        if let sharedStrings = sharedStrings,
-           let stringValue = cell.stringValue(sharedStrings) {
-            return stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    /// Vérifie si l'option d'un cours correspond à l'option sélectionnée par l'étudiant.
+    /// Les cours "Tous" / "Toutes orientations" sont toujours affichés.
+    private static func matchesOption(courseOption: String, selectedOption: String) -> Bool {
+        let cleanOption = courseOption.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowerClean  = cleanOption.lowercased()
+
+        // Cours ouvert à toutes les orientations
+        if cleanOption.isEmpty || lowerClean.contains("tous") || lowerClean.contains("toutes orientations") {
+            return true
         }
-        
-        // ✅ AJOUT : Si stringValue est nil, récupérer manuellement depuis richText
-        if let sharedStrings = sharedStrings,
-           let type = cell.type,
-           type == .sharedString,
-           let valueString = cell.value,
-           let sharedStringIndex = Int(valueString),
-           sharedStringIndex < sharedStrings.items.count {
-            
-            let sharedString = sharedStrings.items[sharedStringIndex]
-            
-            // Si le texte est dans richText (tableau de fragments)
-            if !sharedString.richText.isEmpty {
-                let fullText = sharedString.richText
-                    .compactMap { $0.text }
-                    .joined()
-                
-                if !fullText.isEmpty {
-                    return fullText.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-            }
-            
-            // Sinon, utiliser le texte simple s'il existe
-            if let simpleText = sharedString.text {
-                return simpleText.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        }
-        
-        // Fallback sur la valeur brute
-        if let value = cell.value {
-            return value.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        
-        return nil
-    }
-    
-    // Fonction pour lire spécifiquement les cellules de date
-    private static func getDateCellValue(_ cells: [Cell], at index: Int, sharedStrings: SharedStrings?) -> String? {
-        guard index < cells.count else { return nil }
-        let cell = cells[index]
-        
-        if let sharedStrings = sharedStrings,
-           let stringValue = cell.stringValue(sharedStrings) {
-            return stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        
-        if let inlineString = cell.inlineString {
-            return inlineString.text?.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        
-        if let value = cell.value {
-            return value.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        
-        return nil
-    }
-    
-    private static func parseDate(_ dateString: String) -> Date? {
-        // Vérifier si c'est un serial number Excel (un nombre)
-        if let serialNumber = Double(dateString) {
-            let referenceDate = DateComponents(calendar: Calendar.current, year: 1899, month: 12, day: 30)
-            guard let excelEpoch = Calendar.current.date(from: referenceDate) else { return nil }
-            
-            let daysToAdd = Int(serialNumber)
-            
-            if let date = Calendar.current.date(byAdding: .day, value: daysToAdd, to: excelEpoch) {
-                return date
-            }
-        }
-        
-        // Sinon, parser comme format texte normal (DD/MM/YYYY, DD.MM.YYYY, etc.)
-        let components = dateString.split(whereSeparator: { $0 == "/" || $0 == "." || $0 == "-" })
-        guard components.count >= 3 else { return nil }
-        
-        let first = Int(components[0]) ?? 0
-        let second = Int(components[1]) ?? 0
-        let third = Int(components[2]) ?? 0
-        
-        var month: Int
-        var day: Int
-        var year: Int
-        
-        if first > 12 {
-            day = first
-            month = second
-            year = third
-        } else if second > 12 {
-            month = first
-            day = second
-            year = third
-        } else {
-            month = first
-            day = second
-            year = third
-        }
-        
-        if year < 100 {
-            year += 2000
-        }
-        
-        var dateComponents = DateComponents()
-        dateComponents.day = day
-        dateComponents.month = month
-        dateComponents.year = year
-        
-        return Calendar.current.date(from: dateComponents)
-    }
-    
-    private static func formatHeure(debut: String, fin: String) -> String {
-        let debutFormatted = formatSingleHeureUniform(debut)
-        let finFormatted = formatSingleHeureUniform(fin)
-        return "\(debutFormatted) - \(finFormatted)"
-    }
-    
-    private static func formatSingleHeureUniform(_ heure: String) -> String {
-        let cleaned = heure.trimmingCharacters(in: .whitespaces)
-        
-        // Si c'est vide, retourner une valeur par défaut
-        if cleaned.isEmpty {
-            return "00:00"
-        }
-        
-        // ✅ CORRECTION : Si c'est un nombre avec point
-        if cleaned.contains(".") {
-            if let doubleValue = Double(cleaned) {
-                let hours = Int(doubleValue)
-                // La partie décimale représente directement les minutes (pas une fraction)
-                let decimalPart = doubleValue - Double(hours)
-                let decimalString = String(format: "%.1f", decimalPart)
-                
-                // Extraire le chiffre après le point
-                if let dotIndex = decimalString.firstIndex(of: "."),
-                   decimalString.count > dotIndex.utf16Offset(in: decimalString) + 1 {
-                    let minuteChar = decimalString[decimalString.index(after: dotIndex)]
-                    if let minuteDigit = Int(String(minuteChar)) {
-                        let minutes = minuteDigit * 10  // .3 devient 30
-                        return String(format: "%02d:%02d", hours, minutes)
-                    }
-                }
-                
-                // Fallback si on n'arrive pas à extraire
-                return String(format: "%02d:00", hours)
-            }
-        }
-        
-        // Si ça contient deux-points (comme "14:00")
-        if cleaned.contains(":") {
-            let components = cleaned.components(separatedBy: ":")
-            if components.count == 2,
-               let hour = Int(components[0]),
-               let minute = Int(components[1]) {
-                return String(format: "%02d:%02d", hour, minute)
-            }
-        }
-        
-        // Si c'est juste un nombre (comme "14" ou "9")
-        if let hour = Int(cleaned) {
-            return String(format: "%02d:00", hour)
-        }
-        
-        // Sinon retourner tel quel
-        return cleaned
-    }
-    
-    private static func extractDuration(debut: String, fin: String) -> String {
-        // Nettoyer les espaces
-        let cleanDebut = debut.trimmingCharacters(in: .whitespaces)
-        let cleanFin = fin.trimmingCharacters(in: .whitespaces)
-        
-        // Si l'une des valeurs est vide, retourner vide
-        if cleanDebut.isEmpty || cleanFin.isEmpty {
-            return ""
-        }
-        
-        // Parser l'heure de début
-        var startMinutes = 0
-        if cleanDebut.contains(":") {
-            let parts = cleanDebut.components(separatedBy: ":")
-            if parts.count == 2,
-               let hours = Int(parts[0]),
-               let minutes = Int(parts[1]) {
-                startMinutes = hours * 60 + minutes
-            }
-        } else if cleanDebut.contains(".") {
-            // ✅ CORRECTION : Gérer les floats avec précision
-            if let doubleValue = Double(cleanDebut) {
-                let hours = Int(doubleValue)
-                let decimalPart = doubleValue - Double(hours)
-                let decimalString = String(format: "%.1f", decimalPart)
-                
-                // Extraire le chiffre après le point (ex: 0.3 -> 3 -> 30 minutes)
-                if let dotIndex = decimalString.firstIndex(of: "."),
-                   decimalString.count > dotIndex.utf16Offset(in: decimalString) + 1 {
-                    let minuteChar = decimalString[decimalString.index(after: dotIndex)]
-                    if let minuteDigit = Int(String(minuteChar)) {
-                        let minutes = minuteDigit * 10  // .3 devient 30
-                        startMinutes = hours * 60 + minutes
-                    }
-                } else {
-                    startMinutes = hours * 60
-                }
-            }
-        } else if let hours = Int(cleanDebut) {
-            startMinutes = hours * 60
-        }
-        
-        // Parser l'heure de fin
-        var endMinutes = 0
-        if cleanFin.contains(":") {
-            let parts = cleanFin.components(separatedBy: ":")
-            if parts.count == 2,
-               let hours = Int(parts[0]),
-               let minutes = Int(parts[1]) {
-                endMinutes = hours * 60 + minutes
-            }
-        } else if cleanFin.contains(".") {
-            // ✅ CORRECTION : Gérer les floats avec précision
-            if let doubleValue = Double(cleanFin) {
-                let hours = Int(doubleValue)
-                let decimalPart = doubleValue - Double(hours)
-                let decimalString = String(format: "%.1f", decimalPart)
-                
-                // Extraire le chiffre après le point (ex: 0.3 -> 3 -> 30 minutes)
-                if let dotIndex = decimalString.firstIndex(of: "."),
-                   decimalString.count > dotIndex.utf16Offset(in: decimalString) + 1 {
-                    let minuteChar = decimalString[decimalString.index(after: dotIndex)]
-                    if let minuteDigit = Int(String(minuteChar)) {
-                        let minutes = minuteDigit * 10  // .3 devient 30
-                        endMinutes = hours * 60 + minutes
-                    }
-                } else {
-                    endMinutes = hours * 60
-                }
-            }
-        } else if let hours = Int(cleanFin) {
-            endMinutes = hours * 60
-        }
-        
-        // Si on n'a pas réussi à parser, retourner vide
-        if startMinutes == 0 && endMinutes == 0 {
-            return ""
-        }
-        
-        // Calculer la différence
-        var totalMinutes = endMinutes - startMinutes
-        
-        // Gérer le cas où on passe minuit
-        if totalMinutes < 0 {
-            totalMinutes += 24 * 60
-        }
-        
-        // Vérification de sécurité : si la durée est absurde (> 24h), retourner vide
-        if totalMinutes > 24 * 60 || totalMinutes < 0 {
-            return ""
-        }
-        
-        let hours = totalMinutes / 60
-        let minutes = totalMinutes % 60
-        
-        if hours > 0 && minutes > 0 {
-            return "\(hours)h\(minutes)min"
-        } else if hours > 0 {
-            return "\(hours)h"
-        } else if minutes > 0 {
-            return "\(minutes)min"
-        } else {
-            return ""
+
+        let selectedLower = selectedOption.lowercased()
+        let parts = cleanOption.components(separatedBy: CharacterSet(charactersIn: "/,"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        return parts.contains { part in
+            guard !part.isEmpty else { return false }
+            let lowerPart = part.lowercased()
+            if lowerPart == selectedLower || selectedLower.contains(lowerPart) || lowerPart.contains(selectedLower) { return true }
+            if selectedLower.contains("primaire")  && (lowerPart == "primaires"   || lowerPart.contains("primaire"))  { return true }
+            if selectedLower.contains("adulte")    && (lowerPart == "adultes"     || lowerPart.contains("adulte"))    { return true }
+            if selectedLower.contains("enfant")    && (lowerPart == "pédiatriques" || lowerPart == "pediatriques" ||
+                                                        lowerPart == "pédiatrie"   || lowerPart == "pediatrie" ||
+                                                        lowerPart.contains("enfant"))                                  { return true }
+            if selectedLower.contains("mentale")   && lowerPart.contains("mentale")                                   { return true }
+            return false
         }
     }
 
-    // Extraire la date de mise à jour depuis l'en-tête du fichier Excel
-    static func extractUpdateDate(_ data: Data) -> Date? {
-        guard let xlsx = try? XLSXFile(data: data) else {
+    // MARK: - Lecture des cellules par référence de colonne
+    //
+    // CoreXLSX omet les cellules vides dans le tableau `cells`.
+    // On lit donc par référence de colonne (A, B, C…) plutôt que par index positionnel,
+    // ce qui évite tout décalage lors de cellules fusionnées ou vides.
+
+    private static func getCellValueOptimized(_ cells: [Cell], at index: Int, sharedStrings: SharedStrings?) -> String? {
+        let columnLetter = columnIndexToLetter(index)
+        guard let columnRef = ColumnReference(columnLetter),
+              let cell = cells.first(where: { $0.reference.column == columnRef }) else {
             return nil
         }
-        
-        do {
-            guard let firstWorkbook = try xlsx.parseWorkbooks().first else { return nil }
-            let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: firstWorkbook)
-            
-            guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path
-                  ?? worksheetPaths.first?.path else { return nil }
-            
-            let worksheet = try xlsx.parseWorksheet(at: horairePath)
-            let sharedStrings = try? xlsx.parseSharedStrings()
-            let rows = worksheet.data?.rows ?? []
-            
-            if let firstRow = rows.first {
-                let cells = firstRow.cells
-                
-                for (index, _) in cells.enumerated() {
-                    if let value = getCellValueOptimized(cells, at: index, sharedStrings: sharedStrings),
-                       !value.isEmpty {
-                        
-                        if value.contains("2025") || value.contains("2024") {
-                            if let dateMatch = value.range(of: "\\d{2}\\.\\d{2}\\.\\d{4}", options: .regularExpression) {
-                                let dateStr = String(value[dateMatch])
-                                
-                                let formatter = DateFormatter()
-                                formatter.dateFormat = "dd.MM.yyyy"
-                                if let date = formatter.date(from: dateStr) {
-                                    return date
-                                }
-                            }
-                        }
-                    }
-                }
+
+        if let sharedStrings = sharedStrings, let stringValue = cell.stringValue(sharedStrings) {
+            return stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        // Fallback richText pour les shared strings mal parsées
+        if let sharedStrings = sharedStrings,
+           cell.type == .sharedString,
+           let valueString = cell.value,
+           let idx = Int(valueString),
+           idx < sharedStrings.items.count {
+
+            let item = sharedStrings.items[idx]
+
+            if !item.richText.isEmpty {
+                let fullText = item.richText.compactMap { $0.text }.joined()
+                if !fullText.isEmpty { return fullText.trimmingCharacters(in: .whitespacesAndNewlines) }
             }
-            
-            return nil
-            
-        } catch {
-            return nil
+
+            if let simpleText = item.text {
+                return simpleText.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
         }
+
+        return cell.value?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
-    
-    // Validation de la structure du fichier
+
+    private static func getDateCellValue(_ cells: [Cell], at index: Int, sharedStrings: SharedStrings?) -> String? {
+        let columnLetter = columnIndexToLetter(index)
+        guard let columnRef = ColumnReference(columnLetter),
+              let cell = cells.first(where: { $0.reference.column == columnRef }) else {
+            return nil
+        }
+
+        if let sharedStrings = sharedStrings, let stringValue = cell.stringValue(sharedStrings) {
+            return stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        if let inlineString = cell.inlineString {
+            return inlineString.text?.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return cell.value?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Convertit un index de colonne (0-based) en lettre Excel (0→A, 1→B, 25→Z, 26→AA…)
+    private static func columnIndexToLetter(_ index: Int) -> String {
+        var result = ""
+        var n = index
+        repeat {
+            result = String(UnicodeScalar(65 + (n % 26))!) + result
+            n = n / 26 - 1
+        } while n >= 0
+        return result
+    }
+
+    // MARK: - Parsing de date (serial number Excel uniquement)
+
+    private static func parseDate(_ dateString: String) -> Date? {
+        guard let serialNumber = Double(dateString) else { return nil }
+
+        var utcCalendar = Calendar(identifier: .gregorian)
+        utcCalendar.timeZone = TimeZone(identifier: "UTC")!
+
+        let referenceDate = DateComponents(calendar: utcCalendar, year: 1899, month: 12, day: 30)
+        guard let excelEpoch = utcCalendar.date(from: referenceDate) else { return nil }
+
+        return utcCalendar.date(byAdding: .day, value: Int(serialNumber), to: excelEpoch)
+    }
+
+    // MARK: - Formatage des heures
+
+    private static func formatHeure(debut: String, fin: String) -> String {
+        "\(formatSingleHeureUniform(debut)) - \(formatSingleHeureUniform(fin))"
+    }
+
+    private static func formatSingleHeureUniform(_ heure: String) -> String {
+        let cleaned = heure.trimmingCharacters(in: .whitespaces)
+        guard !cleaned.isEmpty else { return "00:00" }
+
+        if cleaned.contains("."), let doubleValue = Double(cleaned) {
+            let hours = Int(doubleValue)
+            let decimalString = String(format: "%.1f", doubleValue - Double(hours))
+            if let dotIndex = decimalString.firstIndex(of: "."),
+               decimalString.count > dotIndex.utf16Offset(in: decimalString) + 1,
+               let minuteDigit = Int(String(decimalString[decimalString.index(after: dotIndex)])) {
+                return String(format: "%02d:%02d", hours, minuteDigit * 10)
+            }
+            return String(format: "%02d:00", hours)
+        }
+
+        if cleaned.contains(":") {
+            let parts = cleaned.components(separatedBy: ":")
+            if parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]) {
+                return String(format: "%02d:%02d", h, m)
+            }
+        }
+
+        if let hour = Int(cleaned) { return String(format: "%02d:00", hour) }
+
+        return cleaned
+    }
+
+    private static func extractDuration(debut: String, fin: String) -> String {
+        func toMinutes(_ s: String) -> Int? {
+            let c = s.trimmingCharacters(in: .whitespaces)
+            if c.contains(":") {
+                let parts = c.components(separatedBy: ":")
+                guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]) else { return nil }
+                return h * 60 + m
+            }
+            if c.contains("."), let d = Double(c) {
+                let h = Int(d)
+                let decStr = String(format: "%.1f", d - Double(h))
+                if let dotIdx = decStr.firstIndex(of: "."),
+                   let digit = Int(String(decStr[decStr.index(after: dotIdx)])) {
+                    return h * 60 + digit * 10
+                }
+                return h * 60
+            }
+            if let h = Int(c) { return h * 60 }
+            return nil
+        }
+
+        guard let start = toMinutes(debut), let end = toMinutes(fin) else { return "" }
+
+        var total = end - start
+        if total < 0 { total += 24 * 60 }
+        guard total > 0 && total <= 24 * 60 else { return "" }
+
+        let h = total / 60, m = total % 60
+        if h > 0 && m > 0 { return "\(h)h\(m)min" }
+        if h > 0 { return "\(h)h" }
+        if m > 0 { return "\(m)min" }
+        return ""
+    }
+
+    // MARK: - Date de mise à jour dans l'en-tête Excel
+
+    static func extractUpdateDate(_ data: Data) -> Date? {
+        guard let xlsx = try? XLSXFile(data: data),
+              let firstWorkbook = try? xlsx.parseWorkbooks().first else { return nil }
+
+        let worksheetPaths = (try? xlsx.parseWorksheetPathsAndNames(workbook: firstWorkbook)) ?? []
+        guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path
+              ?? worksheetPaths.first?.path else { return nil }
+
+        guard let worksheet = try? xlsx.parseWorksheet(at: horairePath) else { return nil }
+
+        let sharedStrings = try? xlsx.parseSharedStrings()
+        let rows = worksheet.data?.rows ?? []
+
+        guard let firstRow = rows.first else { return nil }
+
+        for (index, _) in firstRow.cells.enumerated() {
+            guard let value = getCellValueOptimized(firstRow.cells, at: index, sharedStrings: sharedStrings),
+                  value.contains("2025") || value.contains("2024"),
+                  let dateMatch = value.range(of: "\\d{2}\\.\\d{2}\\.\\d{4}", options: .regularExpression) else { continue }
+
+            let formatter = DateFormatter()
+            formatter.dateFormat = "dd.MM.yyyy"
+            return formatter.date(from: String(value[dateMatch]))
+        }
+
+        return nil
+    }
+
+    // MARK: - Validation de la structure du fichier
+
     static func validateFileStructure(_ data: Data, fileType: FileType) throws -> Bool {
-        guard let xlsx = try? XLSXFile(data: data) else {
-            return false
-        }
-        
-        guard let firstWorkbook = try xlsx.parseWorkbooks().first else {
-            return false
-        }
-        
+        guard let xlsx = try? XLSXFile(data: data),
+              let firstWorkbook = try? xlsx.parseWorkbooks().first else { return false }
+
         let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: firstWorkbook)
-        
-        // Vérifier qu'il y a bien un onglet "Horaire"
-        guard worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") }) != nil else {
-            return false
-        }
-        
-        // Pour les cours, vérifier qu'il y a un "Menu déroulant"
+        guard worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") }) != nil else { return false }
+
         if fileType == .cours {
             guard worksheetPaths.first(where: {
                 $0.name!.lowercased().contains("menu") ||
                 $0.name!.lowercased().contains("déroulant") ||
                 $0.name!.lowercased().contains("deroulant")
-            }) != nil else {
-                return false
-            }
+            }) != nil else { return false }
         }
-        
+
         switch fileType {
-        case .cours:
-            return try validateCoursStructure(xlsx, workbook: firstWorkbook)
-        case .examens:
-            return try validateExamensStructure(xlsx, workbook: firstWorkbook)
+        case .cours:    return try validateCoursStructure(xlsx, workbook: firstWorkbook)
+        case .examens:  return try validateExamensStructure(xlsx, workbook: firstWorkbook)
         }
     }
-    
+
     private static func validateCoursStructure(_ xlsx: XLSXFile, workbook: Workbook) throws -> Bool {
-        let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: workbook)
-        guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path else {
-            return false
-        }
-        
-        let worksheet = try xlsx.parseWorksheet(at: horairePath)
-        let rows = worksheet.data?.rows ?? []
-        
-        guard rows.count >= 3 else { return false }
-        
-        if let headerRow = rows.first {
-            let cells = headerRow.cells
-            return cells.count >= 11
-        }
-        
-        return false
+        let paths = try xlsx.parseWorksheetPathsAndNames(workbook: workbook)
+        guard let path = paths.first(where: { $0.name!.lowercased().contains("horaire") })?.path else { return false }
+        let rows = (try? xlsx.parseWorksheet(at: path))?.data?.rows ?? []
+        return rows.count >= 3 && (rows.first?.cells.count ?? 0) >= 11
     }
-    
+
     private static func validateExamensStructure(_ xlsx: XLSXFile, workbook: Workbook) throws -> Bool {
-        let worksheetPaths = try xlsx.parseWorksheetPathsAndNames(workbook: workbook)
-        guard let horairePath = worksheetPaths.first(where: { $0.name!.lowercased().contains("horaire") })?.path else {
-            return false
-        }
-        
-        let worksheet = try xlsx.parseWorksheet(at: horairePath)
-        let rows = worksheet.data?.rows ?? []
-        
-        guard rows.count >= 4 else { return false }
-        
-        if let firstDataRow = rows.dropFirst(3).first {
-            return firstDataRow.cells.count >= 12
-        }
-        
-        return false
+        let paths = try xlsx.parseWorksheetPathsAndNames(workbook: workbook)
+        guard let path = paths.first(where: { $0.name!.lowercased().contains("horaire") })?.path else { return false }
+        let rows = (try? xlsx.parseWorksheet(at: path))?.data?.rows ?? []
+        return rows.count >= 4 && (rows.dropFirst(3).first?.cells.count ?? 0) >= 12
     }
 }

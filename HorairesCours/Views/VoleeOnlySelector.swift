@@ -131,8 +131,11 @@ struct VoleeOnlySelector: View {
                                 // Bouton Sauvegarder
                                 Button(action: {
                                     if viewModel.selectedVolee != nil && !viewModel.selectedModalites.isEmpty {
-                                        dismiss()
-                                    }
+                                            dismiss()
+                                            Task {
+                                                await viewModel.loadData(forceRefresh: true)
+                                            }
+                                        }
                                 }) {
                                     Text("Sauvegarder")
                                         .font(.headline)

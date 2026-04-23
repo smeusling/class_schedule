@@ -4,53 +4,39 @@ import SwiftUI
 
 struct WeekView: View {
     @ObservedObject var viewModel: ScheduleViewModel
-    // Obtenir les dates de la semaine (Lundi à Vendredi uniquement)
+
+    // MARK: - Helpers
+
     var weekDays: [Date] {
         let calendar = Calendar.current
-        
-        guard let weekStart = calendar.dateInterval(of: .weekOfYear, for: viewModel.selectedDate)?.start else {
-            return []
-        }
-        
+        guard let weekStart = calendar.dateInterval(of: .weekOfYear, for: viewModel.selectedDate)?.start else { return [] }
+
+        // Si le début de semaine tombe un dimanche (weekday == 1), décaler au lundi
         var monday = weekStart
-        let weekday = calendar.component(.weekday, from: weekStart)
-        
-        if weekday == 1 {
+        if calendar.component(.weekday, from: weekStart) == 1 {
             monday = calendar.date(byAdding: .day, value: 1, to: weekStart)!
         }
-        
-        var dates: [Date] = []
-        for i in 0..<5 {
-            if let date = calendar.date(byAdding: .day, value: i, to: monday) {
-                dates.append(date)
-            }
-        }
-        
-        return dates
+
+        return (0..<5).compactMap { calendar.date(byAdding: .day, value: $0, to: monday) }
     }
-    
-    // Dans WeekView.swift, modifie weekInfo et dateRange
-    
+
     var dateRange: String {
         let calendar = Calendar.current
-        guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: viewModel.selectedDate) else {
-            return ""
-        }
-        
+        guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: viewModel.selectedDate) else { return "" }
+
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "fr_FR")
         formatter.dateFormat = "d MMM"
-        
+
         let start = formatter.string(from: weekInterval.start)
         let end = calendar.date(byAdding: .day, value: 6, to: weekInterval.start)!
-        let endFormatted = formatter.string(from: end)
-        
-        return "\(start) - \(endFormatted)" // ✅ Juste les dates
+        return "\(start) - \(formatter.string(from: end))"
     }
-    
+
+    // MARK: - Body
+
     var body: some View {
         VStack(spacing: 0) {
-            // En-tête avec info semaine
             VStack(spacing: 4) {
                 Text(dateRange)
                     .font(.system(size: 20, weight: .bold))
@@ -59,22 +45,17 @@ struct WeekView: View {
                     .padding(.vertical, 12)
                     .background(Color.white)
                     .shadow(color: .black.opacity(0.05), radius: 2, y: 2)
-                
-                // Liste des jours en lignes horizontales
+
                 if viewModel.schedules.isEmpty {
                     Spacer()
                     VStack(spacing: 16) {
                         Image(systemName: "calendar.badge.clock")
                             .font(.system(size: 50))
                             .foregroundColor(.gray)
-                        
                         Text(viewModel.currentFileType == .examens ? "Aucun examen cette semaine" : "Aucun cours cette semaine")
-                                            .foregroundColor(.gray)
-                        
-                        Button("Choisir une volée") {
-                            viewModel.changeCursus()
-                        }
-                        .buttonStyle(.borderedProminent)
+                            .foregroundColor(.gray)
+                        Button("Choisir une volée") { viewModel.changeCursus() }
+                            .buttonStyle(.borderedProminent)
                     }
                     Spacer()
                 } else {
@@ -82,18 +63,17 @@ struct WeekView: View {
                         VStack(spacing: 1) {
                             ForEach(weekDays, id: \.self) { date in
                                 WeekDayRow(
-                                                date: date,
-                                                schedules: viewModel.groupedByDate[Calendar.current.startOfDay(for: date)] ?? [],
-                                                isExamen: viewModel.currentFileType == .examens  // ✅ NOUVEAU
-                                            )
+                                    date: date,
+                                    schedules: viewModel.groupedByDate[Calendar.current.startOfDay(for: date)] ?? [],
+                                    isExamen: viewModel.currentFileType == .examens
+                                )
                             }
                         }
                         .padding(.bottom, 80)
                     }
                     .background(Color(red: 0.95, green: 0.95, blue: 0.97))
                 }
-                
-                // Footer avec navigation semaine
+
                 WeekNavigationFooter(
                     onPrevious: {
                         viewModel.selectedDate = Calendar.current.date(byAdding: .weekOfYear, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate
@@ -106,86 +86,65 @@ struct WeekView: View {
             }
             .background(Color(red: 0.95, green: 0.95, blue: 0.97))
         }
-        
-        
     }
-    
-    // MARK: - Ligne d'un jour (row horizontale)
+
+    // MARK: - Ligne d'un jour
+
     struct WeekDayRow: View {
         let date: Date
         let schedules: [CourseSchedule]
         let isExamen: Bool
-        
+
         var sortedSchedules: [CourseSchedule] {
-            schedules.sorted { schedule1, schedule2 in
-                let time1 = extractStartTime(from: schedule1.heure)
-                let time2 = extractStartTime(from: schedule2.heure)
-                return time1 < time2
-            }
+            schedules.sorted { extractStartTime(from: $0.heure) < extractStartTime(from: $1.heure) }
         }
-        
+
         func extractStartTime(from heureString: String) -> Int {
-            let components = heureString.components(separatedBy: " - ")
-            guard let startTime = components.first?.trimmingCharacters(in: .whitespaces) else {
-                return 0
-            }
-            
+            guard let startTime = heureString.components(separatedBy: " - ").first?.trimmingCharacters(in: .whitespaces) else { return 0 }
             if startTime.contains(":") {
-                let timeParts = startTime.components(separatedBy: ":")
-                guard timeParts.count == 2,
-                      let hours = Int(timeParts[0]),
-                      let minutes = Int(timeParts[1]) else {
-                    return 0
-                }
-                return hours * 60 + minutes
-            } else {
-                guard let hours = Int(startTime) else {
-                    return 0
-                }
-                return hours * 60
+                let parts = startTime.components(separatedBy: ":")
+                guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]) else { return 0 }
+                return h * 60 + m
             }
+            return (Int(startTime) ?? 0) * 60
         }
-        
+
         var dayName: String {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "fr_FR")
-            formatter.dateFormat = "EEE"
-            return formatter.string(from: date).uppercased()
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "fr_FR")
+            f.dateFormat = "EEE"
+            return f.string(from: date).uppercased()
         }
-        
+
         var dayNumber: String {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "d"
-            return formatter.string(from: date)
+            let f = DateFormatter()
+            f.dateFormat = "d"
+            return f.string(from: date)
         }
-        
+
         var body: some View {
             HStack(alignment: .top, spacing: 0) {
-                // Colonne de la date (à gauche)
                 VStack(spacing: 4) {
                     Text(dayName)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.blue)
-                    
                     Text(dayNumber)
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.black)
                 }
                 .frame(width: 60)
                 .padding(.vertical, 12)
-                
-                // Séparateur vertical
+
                 Rectangle()
                     .fill(Color.gray.opacity(0.2))
                     .frame(width: 1)
-                
-                // Cours en scrollview horizontale
+
                 if schedules.isEmpty {
                     Text(isExamen ? "Pas d'examen" : "Pas de cours")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.gray)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 20)
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
@@ -201,41 +160,34 @@ struct WeekView: View {
             .background(Color.white)
         }
     }
-    
-    // MARK: - Carte de cours (version horizontale compacte)
+
+    // MARK: - Carte de cours
+
     struct WeekCourseCard: View {
         let schedule: CourseSchedule
-        
+
         var body: some View {
             NavigationLink(destination: CourseDetailView(schedule: schedule)) {
                 VStack(alignment: .leading, spacing: 6) {
-                    // Horaire
                     Text(schedule.heure)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.black)
-                    
-                    // Nom du cours
                     Text(schedule.cours)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.black)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                    
-                    // Salle
                     if !schedule.salle.isEmpty {
                         HStack(spacing: 4) {
                             Image(systemName: "mappin.circle.fill")
                                 .font(.system(size: 10))
                                 .foregroundColor(Color(white: 0.7))
-                            
                             Text(schedule.salle)
                                 .font(.system(size: 11))
                                 .foregroundColor(Color(white: 0.7))
                                 .lineLimit(1)
                         }
                     }
-                    
-                    // Enseignant
                     if !schedule.enseignant.isEmpty {
                         Text(schedule.enseignant)
                             .font(.system(size: 10))
