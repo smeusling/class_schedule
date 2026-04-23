@@ -319,7 +319,7 @@ class ExcelParser {
                 columnMap["cursus"] = optionIndex - 1
             }
         }
-
+        print("📋 columnMap: \(columnMap)")
         return columnMap
     }
 
@@ -446,15 +446,16 @@ class ExcelParser {
             return []
         }
 
-        let voleeCol         = columnMap["volée"] ?? 8
-        let arriveeCol       = columnMap["arrivée"] ?? 2
-        let heureDebutCol    = columnMap["heure début"] ?? 3
-        let heureFinCol      = columnMap["heure fin"] ?? 4
-        let modaliteCol      = columnMap["modalité"] ?? 6
-        let anonymisationCol = columnMap["anonymisation"] ?? 7
-        let optionCol        = columnMap["option"] ?? 9
-        let enseignantCol    = columnMap["enseignant"] ?? 10
-        let salleCol         = columnMap["salle"] ?? 11
+        // arriveeCol est optionnel : présent dans Automne, absent dans Printemps
+        let arriveeCol       = columnMap["arrivée"]
+        let heureDebutCol    = columnMap["heure début"] ?? (arriveeCol != nil ? 3 : 2)
+        let heureFinCol      = columnMap["heure fin"]   ?? (arriveeCol != nil ? 4 : 3)
+        let modaliteCol      = columnMap["modalité"]    ?? (arriveeCol != nil ? 6 : 5)
+        let anonymisationCol = columnMap["anonymisation"] ?? (arriveeCol != nil ? 7 : 6)
+        let voleeCol         = columnMap["volée"]       ?? (arriveeCol != nil ? 8 : 7)
+        let optionCol        = columnMap["option"]      ?? (arriveeCol != nil ? 9 : 8)
+        let enseignantCol    = columnMap["enseignant"]  ?? (arriveeCol != nil ? 10 : 9)
+        let salleCol         = columnMap["salle"]       ?? (arriveeCol != nil ? 11 : 10)
 
         for (index, row) in rows.enumerated() {
             if index < 3 { continue }
@@ -462,7 +463,6 @@ class ExcelParser {
             let cells = row.cells
 
             let dateStr          = getDateCellValue(cells, at: dateCol, sharedStrings: sharedStrings) ?? ""
-            let arriveeControle  = getCellValueOptimized(cells, at: arriveeCol, sharedStrings: sharedStrings) ?? ""
             let heureDebut       = getCellValueOptimized(cells, at: heureDebutCol, sharedStrings: sharedStrings) ?? ""
             let heureFin         = getCellValueOptimized(cells, at: heureFinCol, sharedStrings: sharedStrings) ?? ""
             let coursRaw         = getCellValueOptimized(cells, at: coursCol, sharedStrings: sharedStrings) ?? ""
@@ -472,6 +472,14 @@ class ExcelParser {
             let option           = getCellValueOptimized(cells, at: optionCol, sharedStrings: sharedStrings) ?? ""
             let enseignant       = getCellValueOptimized(cells, at: enseignantCol, sharedStrings: sharedStrings) ?? ""
 
+            // Arrivée : optionnelle selon la structure du fichier
+            let arriveeControle: String
+            if let col = arriveeCol {
+                arriveeControle = getCellValueOptimized(cells, at: col, sharedStrings: sharedStrings) ?? ""
+            } else {
+                arriveeControle = ""
+            }
+
             var salle = getCellValueOptimized(cells, at: salleCol, sharedStrings: sharedStrings) ?? ""
             if ["#REF!", "#N/A", "#VALUE!", "#DIV/0!", "#NAME?", "0"].contains(salle) { salle = "" }
 
@@ -479,6 +487,7 @@ class ExcelParser {
             guard matchesVoleeForExamens(volee: volee, modalite: modalite, option: option, selectedVolee: selectedVolee, selectedModalites: modalites) else { continue }
 
             if let selectedOption = selectedOption, !selectedOption.isEmpty {
+                print("🔍 Option check: courseOption='\(option)' selectedOption='\(selectedOption)' match=\(matchesOption(courseOption: option, selectedOption: selectedOption))")
                 guard matchesOption(courseOption: option, selectedOption: selectedOption) else { continue }
             }
 
@@ -521,7 +530,7 @@ class ExcelParser {
             ))
             colorIndex += 1
         }
-
+        print("📋 arriveeCol=\(String(describing: arriveeCol)) heureDebutCol=\(heureDebutCol) voleeCol=\(voleeCol) optionCol=\(optionCol)")
         return scheduleItems
     }
 
@@ -566,8 +575,14 @@ class ExcelParser {
 
         guard voleeMatches else { return false }
 
-        if cleanOption.contains("toutes orientations") || selectedModalites.count == 2 { return true }
+        // Si toutes les modalités sont sélectionnées, ou option "toutes orientations" → accepter
+        if selectedModalites.count == 2 || cleanOption.contains("toutes orientations") { return true }
 
+        // ✅ FIX : Si la volée contient "tous" (ex: "IPS 8-25 Tous"), pas de modalité spécifique
+        // → accepter pour toute modalité sélectionnée
+        if cleanVolee.contains("tous") { return true }
+
+        // Vérifier la modalité via la colonne Modalité ou la volée
         for selectedModalite in selectedModalites {
             switch selectedModalite {
             case .tempsPlein:
@@ -578,7 +593,7 @@ class ExcelParser {
             }
         }
 
-        // Pas de modalité spécifiée dans l'examen : accepter par défaut
+        // Pas de modalité spécifiée dans l'examen → accepter par défaut
         if cleanModalite.isEmpty && !cleanVolee.contains("temps plein") &&
            !cleanVolee.contains("plein") && !cleanVolee.contains("partiel") { return true }
 
