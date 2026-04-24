@@ -30,44 +30,7 @@ struct WeekView: View {
         VStack(spacing: 0) {
 
             // ── Header semaine avec navigation ─────────────────────
-            HStack(spacing: 16) {
-                Button(action: {
-                    viewModel.selectedDate = Calendar.current.date(byAdding: .weekOfYear, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate
-                }) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(Color(hex: "7B6FE8"))
-                        .padding(8)
-                        .background(Color(hex: "7B6FE8").opacity(0.1))
-                        .clipShape(Circle())
-                }
-
-                Spacer()
-
-                Text(dateRange)
-                    .font(.system(size: 21, weight: .bold))
-                    .font(.system(size: 21, weight: .bold))
-                    .foregroundColor(.primary)
-
-                Spacer()
-
-                Button(action: {
-                    viewModel.selectedDate = Calendar.current.date(byAdding: .weekOfYear, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate
-                }) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(Color(hex: "7B6FE8"))
-                        .padding(8)
-                        .background(Color(hex: "7B6FE8").opacity(0.1))
-                        .clipShape(Circle())
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .padding(.bottom, 10)
-            .padding(.top, 10)
-            .background(Color.white)
-            .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+            WeekNavigationHeader(viewModel: viewModel)
 
             if viewModel.schedules.isEmpty {
                 Spacer()
@@ -77,8 +40,8 @@ struct WeekView: View {
                         .foregroundColor(.gray)
                     Text(viewModel.currentFileType == .examens ? "Aucun examen cette semaine" : "Aucun cours cette semaine")
                         .foregroundColor(.gray)
-                    Button("Choisir une volée") { viewModel.changeCursus() }
-                        .buttonStyle(.borderedProminent)
+                    PrimaryButton(title: "Choisir une volée") { viewModel.changeCursus() }
+                        .padding(.horizontal, 40)
                 }
                 Spacer()
             } else {
@@ -153,10 +116,10 @@ struct WeekView: View {
                         if isToday {
                             Circle()
                                 .fill(Color(hex: "7B6FE8"))
-                                .frame(width: 32, height: 32)
+                                .frame(width: 38, height: 38)
                         }
                         Text(dayNumber)
-                            .font(.system(size: 22, weight: .bold))
+                            .font(.system(size: 24, weight: .bold))
                             .foregroundColor(isToday ? .white : .black)
                     }
                 }
@@ -164,15 +127,15 @@ struct WeekView: View {
                 .padding(.vertical, 12)
 
                 // ── Séparateur ─────────────────────────────────────
-                Rectangle()
-                    .fill(Color.gray.opacity(0.15))
-                    .frame(width: 1)
+//                Rectangle()
+//                    .fill(Color.gray.opacity(0.15))
+//                    .frame(width: 1)
 
                 // ── Cours ──────────────────────────────────────────
                 if schedules.isEmpty {
                     HStack {
                         Text(isExamen ? "Pas d'examen" : "Pas de cours")
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(Color(hex: "4A4A4A"))
                     }
                     .frame(maxWidth: .infinity)
@@ -187,7 +150,8 @@ struct WeekView: View {
                             }
                         }
                         .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
+                        .padding(.top, 12)
+                        .padding(.bottom, 20)
                     }
                 }
             }
@@ -217,7 +181,7 @@ struct WeekView: View {
 
                     // Nom du cours
                     Text(schedule.cours)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.black)
                         .lineLimit(3)
                         .multilineTextAlignment(.leading)
@@ -233,7 +197,7 @@ struct WeekView: View {
                                 .frame(width: 15, height: 15)
                                 .opacity(0.5)
                             Text(schedule.salle)
-                                .font(.system(size: 12))
+                                .font(.system(size: 13))
                                 .foregroundColor(.black.opacity(0.7))
                                 .lineLimit(1)
                         }

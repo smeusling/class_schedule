@@ -24,11 +24,11 @@ struct OfflineBanner: View {
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Mode hors ligne")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.black)
                     
                     Text("Dernière mise à jour: \(formattedDate)")
-                        .font(.system(size: 11))
+                        .font(.system(size: 12))
                         .foregroundColor(Color(white: 0.5))
                 }
             } else {
@@ -52,14 +52,18 @@ struct OfflineBanner: View {
             Button(action: onRefresh) {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.black.opacity(0.75))
+                    .foregroundColor(.black.opacity(0.6))
                     .padding(8)
-                    .background(Color.blue.opacity(0.1))
-                    .clipShape(Circle())
+                    .background(.gray.opacity(0.05))
+                    //.clipShape(Circle())
+                    .overlay(
+                        Circle() // ou Circle() si l'image est ronde
+                            .stroke(.gray.opacity(0.5), lineWidth: 0.5)
+                        )
             }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .background(isOffline ? Color(red: 255/255, green: 246/255, blue: 230/255) : Color(red: 233/255, green: 250/255, blue: 239/255))
+        .background(.gray.opacity(0.05))
     }
 }

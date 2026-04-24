@@ -90,7 +90,7 @@ class ScheduleViewModel: ObservableObject {
                 isOfflineMode = true
             }
         } catch {
-            print("❌ Erreur chargement cache: \(error)")
+            LogManager.shared.log("❌ Erreur chargement cache: \(error)")
         }
     }
 
@@ -248,7 +248,7 @@ class ScheduleViewModel: ObservableObject {
             }
 
         } catch {
-            print("❌ Erreur vérification mises à jour: \(error)")
+            LogManager.shared.log("❌ Erreur vérification mises à jour: \(error)")
         }
     }
 

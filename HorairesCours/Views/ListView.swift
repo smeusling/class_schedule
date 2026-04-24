@@ -5,45 +5,32 @@ import SwiftUI
 struct ListView: View {
     @ObservedObject var viewModel: ScheduleViewModel
 
-    // MARK: - Helpers
-
     var weekDays: [Date] {
         let calendar = Calendar.current
         guard let weekStart = calendar.dateInterval(of: .weekOfYear, for: viewModel.selectedDate)?.start else { return [] }
-
         var monday = weekStart
         if calendar.component(.weekday, from: weekStart) == 1 {
             monday = calendar.date(byAdding: .day, value: 1, to: weekStart)!
         }
-
         return (0..<5).compactMap { calendar.date(byAdding: .day, value: $0, to: monday) }
     }
 
     var dateRange: String {
         let calendar = Calendar.current
         guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: viewModel.selectedDate) else { return "" }
-
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "fr_FR")
         formatter.dateFormat = "d MMM"
-
         let start = formatter.string(from: weekInterval.start)
         let end = calendar.date(byAdding: .day, value: 6, to: weekInterval.start)!
         return "\(start) - \(formatter.string(from: end))"
     }
 
-    // MARK: - Body
-
     var body: some View {
         VStack(spacing: 0) {
-            Text(dateRange)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.black)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.white)
-                .shadow(color: .black.opacity(0.05), radius: 2, y: 2)
 
+            // ── Header semaine avec navigation ─────────────────────
+            WeekNavigationHeader(viewModel: viewModel)
             if viewModel.schedules.isEmpty {
                 Spacer()
                 VStack(spacing: 16) {
@@ -52,8 +39,8 @@ struct ListView: View {
                         .foregroundColor(.gray)
                     Text(viewModel.currentFileType == .examens ? "Aucun examen cette semaine" : "Aucun cours cette semaine")
                         .foregroundColor(.gray)
-                    Button("Choisir une volée") { viewModel.changeCursus() }
-                        .buttonStyle(.borderedProminent)
+                    PrimaryButton(title: "Choisir une volée") { viewModel.changeCursus() }
+                        .padding(.horizontal, 40)
                 }
                 Spacer()
             } else {
@@ -69,71 +56,10 @@ struct ListView: View {
                     }
                     .padding(.bottom, 80)
                 }
-            }
-
-            WeekNavigationFooter(
-                onPrevious: {
-                    viewModel.selectedDate = Calendar.current.date(byAdding: .weekOfYear, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate
-                },
-                onNext: {
-                    viewModel.selectedDate = Calendar.current.date(byAdding: .weekOfYear, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate
-                },
-                viewModel: viewModel
-            )
-        }
-        .background(Color(red: 0.95, green: 0.95, blue: 0.97))
-    }
-}
-
-// MARK: - Footer navigation semaine
-
-struct WeekNavigationFooter: View {
-    let onPrevious: () -> Void
-    let onNext: () -> Void
-    @ObservedObject var viewModel: ScheduleViewModel
-
-    private func weekRange(offset: Int) -> String {
-        let calendar = Calendar.current
-        guard let targetWeek = calendar.date(byAdding: .weekOfYear, value: offset, to: viewModel.selectedDate),
-              let weekInterval = calendar.dateInterval(of: .weekOfYear, for: targetWeek) else { return "" }
-
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "d MMM"
-
-        let start = formatter.string(from: weekInterval.start)
-        let end = calendar.date(byAdding: .day, value: 6, to: weekInterval.start)!
-        return "\(start) - \(formatter.string(from: end))"
-    }
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Button(action: onPrevious) {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold))
-                    Text(weekRange(offset: -1)).font(.system(size: 13, weight: .medium)).lineLimit(1).minimumScaleFactor(0.8)
-                }
-                .foregroundColor(.blue)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .padding(.horizontal, 8)
-            }
-
-            Divider().frame(height: 30)
-
-            Button(action: onNext) {
-                HStack(spacing: 4) {
-                    Text(weekRange(offset: 1)).font(.system(size: 13, weight: .medium)).lineLimit(1).minimumScaleFactor(0.8)
-                    Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold))
-                }
-                .foregroundColor(.blue)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .padding(.horizontal, 8)
+                .background(Color.white)
             }
         }
         .background(Color.white)
-        .shadow(color: .black.opacity(0.1), radius: 8, y: -4)
     }
 }
 
@@ -153,9 +79,7 @@ struct DaySection: View {
         if heureString.contains("Examen:"), let range = heureString.range(of: "Examen:") {
             timeString = String(heureString[range.upperBound...])
         }
-
         guard let startTime = timeString.components(separatedBy: " - ").first?.trimmingCharacters(in: .whitespaces) else { return 0 }
-
         if startTime.contains(":") {
             let parts = startTime.components(separatedBy: ":")
             guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]) else { return 0 }
@@ -184,17 +108,29 @@ struct DaySection: View {
         return f.string(from: date)
     }
 
+    var isToday: Bool {
+        Calendar.current.isDateInToday(date)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+
             // En-tête du jour
             HStack(spacing: 12) {
                 VStack(spacing: 2) {
                     Text(monthName.uppercased())
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.blue)
-                    Text(dayNumber)
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(isToday ? Color(hex: "7B6FE8") : .black)
+                    ZStack {
+                        if isToday {
+                            Circle()
+                                .fill(Color(hex: "7B6FE8"))
+                                .frame(width: 34, height: 34)
+                        }
+                        Text(dayNumber)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(isToday ? .white : .black)
+                    }
                 }
                 .frame(width: 50)
 
@@ -210,10 +146,10 @@ struct DaySection: View {
                         : (isExamen ? "examens" : "cours")
                     Text("\(schedules.count) \(label)")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.blue)
+                        .foregroundColor(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(Color.blue.opacity(0.1))
+                        .background(Color(hex: "7B6FE8"))
                         .cornerRadius(12)
                 }
             }
@@ -242,9 +178,8 @@ struct DaySection: View {
                 }
             }
 
-            Rectangle()
-                .fill(Color(red: 0.95, green: 0.95, blue: 0.97))
-                .frame(height: 8)
+            Divider()
+                .padding(.top, 8)
         }
     }
 }
@@ -258,27 +193,39 @@ struct CourseCell: View {
         HStack(spacing: 12) {
             Rectangle()
                 .fill(schedule.color.color)
-                .frame(width: 4)
+                .frame(width: 6)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(schedule.cours)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.black)
                     .lineLimit(2)
 
                 HStack(spacing: 4) {
-                    Image(systemName: "clock").font(.system(size: 12)).foregroundColor(.gray)
-                    Text(schedule.heure).font(.system(size: 13)).foregroundColor(.gray)
+                    Image(systemName: "clock")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.black.opacity(0.7))
+                    Text(schedule.heure)
+                        .font(.system(size: 13))
+                        .foregroundColor(.black.opacity(0.7))
                     if !schedule.duration.isEmpty {
-                        Text("•").foregroundColor(.gray)
-                        Text(schedule.duration).font(.system(size: 13)).foregroundColor(.gray)
+                        Text("•").foregroundColor(.black.opacity(0.7))
+                        Text(schedule.duration)
+                            .font(.system(size: 13))
+                            .foregroundColor(.black.opacity(0.7))
                     }
                 }
 
                 if !schedule.salle.isEmpty {
                     HStack(spacing: 4) {
-                        Image(systemName: "mappin.circle").font(.system(size: 12)).foregroundColor(.gray)
-                        Text(schedule.salle).font(.system(size: 13)).foregroundColor(.gray)
+                        Image("location")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 15, height: 15)
+                            .opacity(0.7)
+                        Text(schedule.salle)
+                            .font(.system(size: 13))
+                            .foregroundColor(.black.opacity(0.7))
                     }
                 }
             }

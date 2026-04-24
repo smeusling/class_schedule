@@ -154,7 +154,7 @@ class DataSourceManager {
     
     // Récupérer l'URL pour le semestre actuel
     static func getMostRecentSemestreURL() async -> String? {
-        print("📅 Semestre actuel détecté: \(SemestreType.current().rawValue)")
+        LogManager.shared.log("📅 Semestre actuel détecté: \(SemestreType.current().rawValue)")
         switch SemestreType.current() {
         case .automne:   return await getMostRecentAutomneURL()
         case .printemps: return await getMostRecentPrintempsURL()
@@ -170,12 +170,12 @@ class DataSourceManager {
     }
     
     private static func getMostRecentExamensAutomneURL() async -> String? {
-        print("🔍 Recherche du fichier Examens Automne le plus récent...")
+        LogManager.shared.log("🔍 Recherche du fichier Examens Automne le plus récent...")
         
         if let cachedURL = UserDefaults.standard.string(forKey: cachedExamenURLKey),
            let cachedDate = UserDefaults.standard.object(forKey: cachedExamenDateKey) as? Date,
            Date().timeIntervalSince(cachedDate) < 6 * 3600 {
-            print("✅ Utilisation du cache (moins de 6h): \(cachedURL)")
+            LogManager.shared.log("✅ Utilisation du cache (moins de 6h): \(cachedURL)")
             return cachedURL
         }
         
@@ -184,12 +184,12 @@ class DataSourceManager {
     }
     
     private static func getMostRecentExamensPrintempsURL() async -> String? {
-        print("🔍 Recherche du fichier Examens Printemps le plus récent...")
+        LogManager.shared.log("🔍 Recherche du fichier Examens Printemps le plus récent...")
         
         if let cachedURL = UserDefaults.standard.string(forKey: cachedExamensPrintempsURLKey),
            let cachedDate = UserDefaults.standard.object(forKey: cachedExamensPrintempsDateKey) as? Date,
            Date().timeIntervalSince(cachedDate) < 6 * 3600 {
-            print("✅ Utilisation du cache (moins de 6h): \(cachedURL)")
+            LogManager.shared.log("✅ Utilisation du cache (moins de 6h): \(cachedURL)")
             return cachedURL
         }
         
@@ -198,12 +198,12 @@ class DataSourceManager {
     }
     
     private static func getMostRecentAutomneURL() async -> String? {
-        print("🔍 Recherche du fichier Automne le plus récent...")
+        LogManager.shared.log("🔍 Recherche du fichier Automne le plus récent...")
         
         if let cachedURL = UserDefaults.standard.string(forKey: cachedAutomneURLKey),
            let cachedDate = UserDefaults.standard.object(forKey: cachedAutomneDateKey) as? Date,
            Date().timeIntervalSince(cachedDate) < 6 * 3600 {
-            print("✅ Utilisation du cache (moins de 6h): \(cachedURL)")
+            LogManager.shared.log("✅ Utilisation du cache (moins de 6h): \(cachedURL)")
             return cachedURL
         }
         
@@ -212,12 +212,12 @@ class DataSourceManager {
     }
     
     private static func getMostRecentPrintempsURL() async -> String? {
-        print("🔍 Recherche du fichier Printemps le plus récent...")
+        LogManager.shared.log("🔍 Recherche du fichier Printemps le plus récent...")
         
         if let cachedURL = UserDefaults.standard.string(forKey: cachedPrintempsURLKey),
            let cachedDate = UserDefaults.standard.object(forKey: cachedPrintempsDateKey) as? Date,
            Date().timeIntervalSince(cachedDate) < 6 * 3600 {
-            print("✅ Utilisation du cache (moins de 6h): \(cachedURL)")
+            LogManager.shared.log("✅ Utilisation du cache (moins de 6h): \(cachedURL)")
             return cachedURL
         }
         
@@ -230,11 +230,11 @@ class DataSourceManager {
         var mostRecentURL: String?
         var mostRecentDate: Date?
         
-        print("🔎 Test de \(min(candidates.count, 30)) URLs candidates...")
+        LogManager.shared.log("🔎 Test de \(min(candidates.count, 30)) URLs candidates...")
         
         for (index, candidateURL) in candidates.prefix(30).enumerated() {
             if let lastModified = await getLastModifiedDate(candidateURL) {
-                print("  [\(index)] ✅ \(candidateURL.components(separatedBy: "/").last ?? "") - \(formatDate(lastModified))")
+                LogManager.shared.log("  [\(index)] ✅ \(candidateURL.components(separatedBy: "/").last ?? "") - \(formatDate(lastModified))")
                 if mostRecentDate == nil || lastModified > mostRecentDate! {
                     mostRecentDate = lastModified
                     mostRecentURL = candidateURL
@@ -243,14 +243,14 @@ class DataSourceManager {
         }
         
         if let finalURL = mostRecentURL, let finalDate = mostRecentDate {
-            print("🎯 Fichier le plus récent: \(finalURL.components(separatedBy: "/").last ?? "")")
-            print("📅 Date de modification: \(formatDate(finalDate))")
+            LogManager.shared.log("🎯 Fichier le plus récent: \(finalURL.components(separatedBy: "/").last ?? "")")
+            LogManager.shared.log("📅 Date de modification: \(formatDate(finalDate))")
             UserDefaults.standard.set(finalURL, forKey: cacheKey)
             UserDefaults.standard.set(Date(), forKey: dateCacheKey)
             return finalURL
         }
         
-        print("❌ Aucun fichier valide trouvé")
+        LogManager.shared.log("❌ Aucun fichier valide trouvé")
         return nil
     }
     
@@ -300,6 +300,6 @@ class DataSourceManager {
         UserDefaults.standard.removeObject(forKey: cachedAutomneDateKey)
         UserDefaults.standard.removeObject(forKey: cachedPrintempsDateKey)
         UserDefaults.standard.removeObject(forKey: cachedExamensPrintempsDateKey)
-        print("🗑️ Cache d'URLs vidé")
+        LogManager.shared.log("🗑️ Cache d'URLs vidé")
     }
 }

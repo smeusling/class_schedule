@@ -95,7 +95,7 @@ class ExcelParser {
             }
 
         } catch {
-            print("❌ Erreur extraction Menu déroulant: \(error)")
+            LogManager.shared.log("❌ Erreur extraction Menu déroulant: \(error)")
         }
 
         return Array(voleesSet).sorted()
@@ -319,7 +319,7 @@ class ExcelParser {
                 columnMap["cursus"] = optionIndex - 1
             }
         }
-        print("📋 columnMap: \(columnMap)")
+        LogManager.shared.log("📋 columnMap: \(columnMap)")
         return columnMap
     }
 
@@ -487,7 +487,7 @@ class ExcelParser {
             guard matchesVoleeForExamens(volee: volee, modalite: modalite, option: option, selectedVolee: selectedVolee, selectedModalites: modalites) else { continue }
 
             if let selectedOption = selectedOption, !selectedOption.isEmpty {
-                print("🔍 Option check: courseOption='\(option)' selectedOption='\(selectedOption)' match=\(matchesOption(courseOption: option, selectedOption: selectedOption))")
+                LogManager.shared.log("🔍 Option check: courseOption='\(option)' selectedOption='\(selectedOption)' match=\(matchesOption(courseOption: option, selectedOption: selectedOption))")
                 guard matchesOption(courseOption: option, selectedOption: selectedOption) else { continue }
             }
 
@@ -530,7 +530,7 @@ class ExcelParser {
             ))
             colorIndex += 1
         }
-        print("📋 arriveeCol=\(String(describing: arriveeCol)) heureDebutCol=\(heureDebutCol) voleeCol=\(voleeCol) optionCol=\(optionCol)")
+        LogManager.shared.log("📋 arriveeCol=\(String(describing: arriveeCol)) heureDebutCol=\(heureDebutCol) voleeCol=\(voleeCol) optionCol=\(optionCol)")
         return scheduleItems
     }
 

@@ -5,6 +5,7 @@ import SwiftUI
 struct HomeView: View {
     @ObservedObject var viewModel: ScheduleViewModel
     @State private var selectedDataSource: DataSourceType
+    @State private var showInfoPanel = false
     
     init(viewModel: ScheduleViewModel) {
         self.viewModel = viewModel
@@ -140,25 +141,124 @@ struct HomeView: View {
                     }
                     
                     // Bouton Valider dans la zone bleue
-                    Button(action: { validateAndContinue() }) {
-                        Text("Valider")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(
-                                viewModel.selectedVolee != nil
-                                    ? LinearGradient(colors: [Color(hex: "7B6FE8"), Color(hex: "5B5BD6")],
-                                                     startPoint: .leading, endPoint: .trailing)
-                                    : LinearGradient(colors: [Color.gray.opacity(0.4), Color.gray.opacity(0.4)],
-                                                     startPoint: .leading, endPoint: .trailing)
-                            )
-                            .cornerRadius(14)
-                            .shadow(color: Color(hex: "7B6FE8").opacity(viewModel.selectedVolee != nil ? 0.35 : 0), radius: 10, y: 4)
+                    VStack(spacing: 8) {
+                        PrimaryButton(title: "Valider") { validateAndContinue() }
+                            .padding(.horizontal)
+                        
+                        Button(action: { showInfoPanel = true }) {
+                            Text("À propos")
+                                .font(.system(size: 13))
+                                .foregroundColor(.gray.opacity(0.6))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
                     }
-                    .disabled(viewModel.selectedVolee == nil)
-                    .padding(.horizontal)
                     .padding(.bottom, 20)
+                }
+                .overlay {
+                    if showInfoPanel {
+                        ZStack {
+                            // Fond noir transparent
+                            Color.black.opacity(0.5)
+                                .ignoresSafeArea()
+                                .onTapGesture { withAnimation { showInfoPanel = false } }
+                            
+                            // Carte centrée
+                            VStack(spacing: 20) {
+                                
+                                // Header avec X
+                                HStack {
+                                    Text("À propos")
+                                        .font(.system(size: 18, weight: .bold))
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Button(action: { withAnimation { showInfoPanel = false } }) {
+                                        Image(systemName: "xmark")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(.gray)
+                                            .padding(8)
+                                            .background(Color.gray.opacity(0.1))
+                                            .clipShape(Circle())
+                                    }
+                                }
+                                
+                                Divider()
+                                
+                                // Infos app
+                                VStack(spacing: 8) {
+                                    HStack {
+                                        Text("Application")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(.gray)
+                                        Spacer()
+                                        Text("Horaires de Cours")
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.primary)
+                                    }
+                                    HStack {
+                                        Text("Version")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(.gray)
+                                        Spacer()
+                                        Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.primary)
+                                    }
+                                    HStack {
+                                        Text("Appareil")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(.gray)
+                                        Spacer()
+                                        Text(getDeviceModel())
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.primary)
+                                    }
+                                    HStack {
+                                        Text("iOS")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(.gray)
+                                        Spacer()
+                                        Text(UIDevice.current.systemVersion)
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.primary)
+                                    }
+                                }
+                                
+                                Divider()
+                                
+                                // Boutons
+                                VStack(spacing: 10) {
+                                    PrimaryButton(title: "Contacter le support") {
+                                        sendSupportEmail()
+                                    }
+                                    
+                                    Button(action: { }) {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "heart.fill")
+                                                .font(.system(size: 14))
+                                            Text("Faire un don")
+                                                .font(.system(size: 16, weight: .medium))
+                                        }
+                                        .foregroundColor(Color(hex: "7B6FE8"))
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 14)
+                                        .background(Color(hex: "7B6FE8").opacity(0.08))
+                                        .cornerRadius(14)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 14)
+                                                .stroke(Color(hex: "7B6FE8").opacity(0.2), lineWidth: 1)
+                                        )
+                                    }
+                                }
+                            }
+                            .padding(24)
+                            .background(Color.white)
+                            .cornerRadius(20)
+                            .shadow(color: .black.opacity(0.2), radius: 20)
+                            .padding(.horizontal, 24)
+                        }
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showInfoPanel)
+                    }
                 }
             }
             .navigationBarHidden(true)
@@ -166,6 +266,17 @@ struct HomeView: View {
                 VoleeOnlySelector(viewModel: viewModel)
             }
         }
+    }
+    
+    func getDeviceModel() -> String {
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let identifier = withUnsafePointer(to: &systemInfo.machine) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1) {
+                String(validatingUTF8: $0) ?? "Unknown"
+            }
+        }
+        return identifier // ex: "iPhone17,1"
     }
     
     private func validateAndContinue() {
@@ -259,6 +370,32 @@ extension Color {
     }
 }
 
-#Preview {
-    HomeView(viewModel: ScheduleViewModel())
+private func sendSupportEmail() {
+    let logs = LogManager.shared.getLogs()
+    let deviceInfo = LogManager.shared.getDeviceInfo()
+    
+    let body = """
+    Bonjour,
+    
+    Je rencontre un problème avec l'application Horaires de Cours.
+    
+    \(deviceInfo)
+    
+    ═══════════════════════════
+    LOGS DE DIAGNOSTIC
+    ═══════════════════════════
+    \(logs.isEmpty ? "Aucun log disponible" : logs)
+    """
+    
+    let subject = "Horaires de Cours - Support"
+    let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+    let encodedBody = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+    
+    if let url = URL(string: "mailto:smeusling@gmail.com?subject=\(encodedSubject)&body=\(encodedBody)") {
+        UIApplication.shared.open(url)
+    }
 }
+
+//#Preview {
+//    HomeView(viewModel: ScheduleViewModel())
+//}

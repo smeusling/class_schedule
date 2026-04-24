@@ -89,20 +89,8 @@ struct VoleeOnlySelector: View {
                             Spacer()
                             
                             if viewModel.errorMessage != nil {
-                                Button(action: {
+                                PrimaryButton(title: "Charger les volées") {
                                     Task { await viewModel.loadCursusList() }
-                                }) {
-                                    Text("Charger les volées")
-                                        .font(.system(size: 17, weight: .semibold))
-                                        .foregroundColor(.white)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 16)
-                                        .background(
-                                            LinearGradient(colors: [Color(hex: "7B6FE8"), Color(hex: "5B5BD6")],
-                                                           startPoint: .leading, endPoint: .trailing)
-                                        )
-                                        .cornerRadius(14)
-                                        .shadow(color: Color(hex: "7B6FE8").opacity(0.35), radius: 10, y: 4)
                                 }
                                 .padding(.horizontal)
                                 
@@ -301,28 +289,11 @@ struct VoleeOnlySelector: View {
                 let canSave = viewModel.selectedVolee != nil && !viewModel.selectedModalites.isEmpty
                 let showSave = !viewModel.availableVolees.isEmpty && !viewModel.isLoading
                 
-                Button(action: {
-                    if canSave { dismiss() }
-                }) {
-                    Text("Sauvegarder")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            canSave
-                                ? LinearGradient(colors: [Color(hex: "7B6FE8"), Color(hex: "5B5BD6")],
-                                                 startPoint: .leading, endPoint: .trailing)
-                                : LinearGradient(colors: [Color.gray.opacity(0.4), Color.gray.opacity(0.4)],
-                                                 startPoint: .leading, endPoint: .trailing)
-                        )
-                        .cornerRadius(14)
-                        .shadow(color: Color(hex: "7B6FE8").opacity(canSave ? 0.35 : 0), radius: 10, y: 4)
-                }
-                .disabled(!canSave)
-                .padding(.horizontal)
-                .padding(.bottom, 20)
-                .opacity(showSave ? 1 : 0)
+                PrimaryButton(title: "Sauvegarder") { if canSave { dismiss() } }
+                    .disabled(!canSave)
+                    .padding(.horizontal)
+                    .padding(.bottom, 20)
+                    .opacity(showSave ? 1 : 0)
             }
         }
         .ignoresSafeArea(edges: .top)

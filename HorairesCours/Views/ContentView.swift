@@ -66,7 +66,7 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .active && !viewModel.showHomeView {
-                print("📱 App activée - vérification des mises à jour")
+                LogManager.shared.log("📱 App activée - vérification des mises à jour")
                 Task {
                     await viewModel.checkForUpdates()
                 }

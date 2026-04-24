@@ -28,18 +28,18 @@ struct TopBarView: View {
                     HStack(spacing: 4) {
                         if let option = viewModel.selectedOption {
                             Text(option)
-                                .font(.system(size: 11))
+                                .font(.system(size: 13))
                                 .foregroundColor(.white.opacity(0.75))
                                 .lineLimit(1)
                             
                             Text("·")
-                                .font(.system(size: 11))
-                                .foregroundColor(.white.opacity(0.5))
+                                .font(.system(size: 13))
+                                .foregroundColor(.white.opacity(0.75))
                         }
                         
                         Text(viewModel.currentSemestreName)
-                            .font(.system(size: 11))
-                            .foregroundColor(.white.opacity(0.65))
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.75))
                             .lineLimit(1)
                     }
                 }
