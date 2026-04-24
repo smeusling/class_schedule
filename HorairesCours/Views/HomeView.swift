@@ -231,7 +231,7 @@ struct HomeView: View {
                                         sendSupportEmail()
                                     }
                                     
-                                    Button(action: { }) {
+                                    /* Button(action: { }) {
                                         HStack(spacing: 8) {
                                             Image(systemName: "heart.fill")
                                                 .font(.system(size: 14))
@@ -247,7 +247,7 @@ struct HomeView: View {
                                             RoundedRectangle(cornerRadius: 14)
                                                 .stroke(Color(hex: "7B6FE8").opacity(0.2), lineWidth: 1)
                                         )
-                                    }
+                                    } */
                                 }
                             }
                             .padding(24)
