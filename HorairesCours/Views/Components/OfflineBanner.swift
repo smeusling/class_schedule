@@ -29,7 +29,7 @@ struct OfflineBanner: View {
                     
                     Text("Dernière mise à jour: \(formattedDate)")
                         .font(.system(size: 11))
-                        .foregroundColor(Color(white: 0.7))
+                        .foregroundColor(Color(white: 0.5))
                 }
             } else {
                 Image(systemName: "checkmark.circle.fill")
@@ -52,7 +52,7 @@ struct OfflineBanner: View {
             Button(action: onRefresh) {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.blue)
+                    .foregroundColor(.black.opacity(0.75))
                     .padding(8)
                     .background(Color.blue.opacity(0.1))
                     .clipShape(Circle())

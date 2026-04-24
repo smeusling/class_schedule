@@ -5,87 +5,100 @@ import SwiftUI
 struct WeekView: View {
     @ObservedObject var viewModel: ScheduleViewModel
 
-    // MARK: - Helpers
-
     var weekDays: [Date] {
         let calendar = Calendar.current
         guard let weekStart = calendar.dateInterval(of: .weekOfYear, for: viewModel.selectedDate)?.start else { return [] }
-
-        // Si le début de semaine tombe un dimanche (weekday == 1), décaler au lundi
         var monday = weekStart
         if calendar.component(.weekday, from: weekStart) == 1 {
             monday = calendar.date(byAdding: .day, value: 1, to: weekStart)!
         }
-
         return (0..<5).compactMap { calendar.date(byAdding: .day, value: $0, to: monday) }
     }
 
     var dateRange: String {
         let calendar = Calendar.current
         guard let weekInterval = calendar.dateInterval(of: .weekOfYear, for: viewModel.selectedDate) else { return "" }
-
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "fr_FR")
         formatter.dateFormat = "d MMM"
-
         let start = formatter.string(from: weekInterval.start)
         let end = calendar.date(byAdding: .day, value: 6, to: weekInterval.start)!
         return "\(start) - \(formatter.string(from: end))"
     }
 
-    // MARK: - Body
-
     var body: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 4) {
-                Text(dateRange)
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.white)
-                    .shadow(color: .black.opacity(0.05), radius: 2, y: 2)
 
-                if viewModel.schedules.isEmpty {
-                    Spacer()
-                    VStack(spacing: 16) {
-                        Image(systemName: "calendar.badge.clock")
-                            .font(.system(size: 50))
-                            .foregroundColor(.gray)
-                        Text(viewModel.currentFileType == .examens ? "Aucun examen cette semaine" : "Aucun cours cette semaine")
-                            .foregroundColor(.gray)
-                        Button("Choisir une volée") { viewModel.changeCursus() }
-                            .buttonStyle(.borderedProminent)
-                    }
-                    Spacer()
-                } else {
-                    ScrollView {
-                        VStack(spacing: 1) {
-                            ForEach(weekDays, id: \.self) { date in
-                                WeekDayRow(
-                                    date: date,
-                                    schedules: viewModel.groupedByDate[Calendar.current.startOfDay(for: date)] ?? [],
-                                    isExamen: viewModel.currentFileType == .examens
-                                )
-                            }
-                        }
-                        .padding(.bottom, 80)
-                    }
-                    .background(Color(red: 0.95, green: 0.95, blue: 0.97))
+            // ── Header semaine avec navigation ─────────────────────
+            HStack(spacing: 16) {
+                Button(action: {
+                    viewModel.selectedDate = Calendar.current.date(byAdding: .weekOfYear, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate
+                }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(Color(hex: "7B6FE8"))
+                        .padding(8)
+                        .background(Color(hex: "7B6FE8").opacity(0.1))
+                        .clipShape(Circle())
                 }
 
-                WeekNavigationFooter(
-                    onPrevious: {
-                        viewModel.selectedDate = Calendar.current.date(byAdding: .weekOfYear, value: -1, to: viewModel.selectedDate) ?? viewModel.selectedDate
-                    },
-                    onNext: {
-                        viewModel.selectedDate = Calendar.current.date(byAdding: .weekOfYear, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate
-                    },
-                    viewModel: viewModel
-                )
+                Spacer()
+
+                Text(dateRange)
+                    .font(.system(size: 21, weight: .bold))
+                    .font(.system(size: 21, weight: .bold))
+                    .foregroundColor(.primary)
+
+                Spacer()
+
+                Button(action: {
+                    viewModel.selectedDate = Calendar.current.date(byAdding: .weekOfYear, value: 1, to: viewModel.selectedDate) ?? viewModel.selectedDate
+                }) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(Color(hex: "7B6FE8"))
+                        .padding(8)
+                        .background(Color(hex: "7B6FE8").opacity(0.1))
+                        .clipShape(Circle())
+                }
             }
-            .background(Color(red: 0.95, green: 0.95, blue: 0.97))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .padding(.bottom, 10)
+            .padding(.top, 10)
+            .background(Color.white)
+            .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+
+            if viewModel.schedules.isEmpty {
+                Spacer()
+                VStack(spacing: 16) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(size: 50))
+                        .foregroundColor(.gray)
+                    Text(viewModel.currentFileType == .examens ? "Aucun examen cette semaine" : "Aucun cours cette semaine")
+                        .foregroundColor(.gray)
+                    Button("Choisir une volée") { viewModel.changeCursus() }
+                        .buttonStyle(.borderedProminent)
+                }
+                Spacer()
+            } else {
+                ScrollView {
+                    VStack(spacing: 1) {
+                        ForEach(weekDays.indices, id: \.self) { index in
+                            WeekDayRow(
+                                date: weekDays[index],
+                                schedules: viewModel.groupedByDate[Calendar.current.startOfDay(for: weekDays[index])] ?? [],
+                                isExamen: viewModel.currentFileType == .examens,
+                                isLast: index == weekDays.count - 1
+                            )
+                        }
+                    }
+                    .padding(.bottom, 80)
+                }
+                .background(Color.white)
+            }
         }
+        .background(Color.white)
     }
 
     // MARK: - Ligne d'un jour
@@ -94,6 +107,7 @@ struct WeekView: View {
         let date: Date
         let schedules: [CourseSchedule]
         let isExamen: Bool
+        let isLast: Bool
 
         var sortedSchedules: [CourseSchedule] {
             schedules.sorted { extractStartTime(from: $0.heure) < extractStartTime(from: $1.heure) }
@@ -122,42 +136,67 @@ struct WeekView: View {
             return f.string(from: date)
         }
 
+        var isToday: Bool {
+            Calendar.current.isDateInToday(date)
+        }
+
         var body: some View {
             HStack(alignment: .top, spacing: 0) {
+
+                // ── Colonne date ───────────────────────────────────
                 VStack(spacing: 4) {
                     Text(dayName)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.blue)
-                    Text(dayNumber)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundColor(isToday ? Color(hex: "7B6FE8") : .black)
+
+                    ZStack {
+                        if isToday {
+                            Circle()
+                                .fill(Color(hex: "7B6FE8"))
+                                .frame(width: 32, height: 32)
+                        }
+                        Text(dayNumber)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(isToday ? .white : .black)
+                    }
                 }
-                .frame(width: 60)
+                .frame(width: 52)
                 .padding(.vertical, 12)
 
+                // ── Séparateur ─────────────────────────────────────
                 Rectangle()
-                    .fill(Color.gray.opacity(0.2))
+                    .fill(Color.gray.opacity(0.15))
                     .frame(width: 1)
 
+                // ── Cours ──────────────────────────────────────────
                 if schedules.isEmpty {
-                    Text(isExamen ? "Pas d'examen" : "Pas de cours")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)
+                    HStack {
+                        Text(isExamen ? "Pas d'examen" : "Pas de cours")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(Color(hex: "4A4A4A"))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
+                        HStack(spacing: 10) {
                             ForEach(sortedSchedules) { schedule in
                                 WeekCourseCard(schedule: schedule)
                             }
                         }
                         .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 10)
                     }
                 }
             }
             .background(Color.white)
+
+            if !isLast {
+                Divider()
+            }
+                
         }
     }
 
@@ -169,37 +208,42 @@ struct WeekView: View {
         var body: some View {
             NavigationLink(destination: CourseDetailView(schedule: schedule)) {
                 VStack(alignment: .leading, spacing: 6) {
+
+                    // Heure + icône
                     Text(schedule.heure)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 13, weight: .regular))
                         .foregroundColor(.black)
+                        .lineLimit(1)
+
+                    // Nom du cours
                     Text(schedule.cours)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.black)
-                        .lineLimit(2)
+                        .lineLimit(3)
                         .multilineTextAlignment(.leading)
+
+                    Spacer(minLength: 0)
+
+                    // Salle
                     if !schedule.salle.isEmpty {
                         HStack(spacing: 4) {
-                            Image(systemName: "mappin.circle.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(Color(white: 0.7))
+                            Image("location")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 15, height: 15)
+                                .opacity(0.5)
                             Text(schedule.salle)
-                                .font(.system(size: 11))
-                                .foregroundColor(Color(white: 0.7))
+                                .font(.system(size: 12))
+                                .foregroundColor(.black.opacity(0.7))
                                 .lineLimit(1)
                         }
                     }
-                    if !schedule.enseignant.isEmpty {
-                        Text(schedule.enseignant)
-                            .font(.system(size: 10))
-                            .foregroundColor(.gray)
-                            .lineLimit(1)
-                    }
                 }
-                .padding(10)
-                .frame(width: 160, alignment: .topLeading)
+                .padding(12)
+                .frame(width: 240, alignment: .topLeading)
                 .background(schedule.color.color)
-                .cornerRadius(10)
-                .shadow(color: .black.opacity(0.1), radius: 3, y: 2)
+                .cornerRadius(14)
+                .shadow(color: schedule.color.color.opacity(0.4), radius: 6, y: 3)
             }
             .buttonStyle(PlainButtonStyle())
         }

@@ -7,57 +7,57 @@ struct TopBarView: View {
     
     var body: some View {
         HStack(spacing: 16) {
-            // Bouton menu - retour à HomeView
+            
+            // ── Flèche retour HomeView ─────────────────────────────
             Button(action: {
                 viewModel.showHomeView = true
             }) {
-                Image(systemName: "line.3.horizontal")
+                Image(systemName: "chevron.left")
                     .foregroundColor(.white)
-                    .font(.system(size: 20))
+                    .font(.system(size: 18, weight: .semibold))
             }
             
-            // Volée sélectionnée + Type de source + Option
+            // ── Volée + option + semestre ──────────────────────────
             if let volee = viewModel.selectedVolee {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(volee)
-                        .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.8))
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
                         .lineLimit(1)
                     
-                    // ✅ NOUVEAU : Afficher l'option si elle existe
-                    if let option = viewModel.selectedOption {
-                        Text(option)
-                            .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.7))
+                    HStack(spacing: 4) {
+                        if let option = viewModel.selectedOption {
+                            Text(option)
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.75))
+                                .lineLimit(1)
+                            
+                            Text("·")
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                        
+                        Text(viewModel.currentSemestreName)
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.65))
                             .lineLimit(1)
                     }
-                    
-                    Text(viewModel.currentSemestreName)
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.6))
-                        .lineLimit(1)
                 }
-                .frame(maxWidth: 150)  // ✅ Augmenté pour avoir plus de place
             }
             
             Spacer()
             
-            // Onglets List et Week
-            HStack(spacing: 8) {
-                ForEach(ViewType.allCases, id: \.self) { type in
-                    Button(type.rawValue) {
-                        viewModel.selectedView = type
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(viewModel.selectedView == type ? Color.blue : Color.clear)
+            // ── Icône toggle vue ───────────────────────────────────
+            Button(action: {
+                viewModel.selectedView = viewModel.selectedView == .week ? .list : .week
+            }) {
+                Image(systemName: viewModel.selectedView == .week ? "list.bullet" : "calendar")
                     .foregroundColor(.white)
-                    .cornerRadius(6)
-                    .font(.system(size: 14))
-                }
+                    .font(.system(size: 20))
+                    .padding(8)
+                    .background(Color.white.opacity(0.2))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
             }
-            
-            Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
