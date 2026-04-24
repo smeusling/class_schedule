@@ -39,7 +39,7 @@ struct DataSource: Codable {
     
     static let semestrePrintemps = DataSource(
         type: .semestre,
-        url: "https://www.unil.ch/files/live/sites/fbm/files/06-espaces/sciences-infirmieres/20261901_Horaire_Printemps_2026.xlsx",
+        url: "https://www.unil.ch/files/live/sites/fbm/files/06-espaces/sciences-infirmieres/20260330_Horaire_Printemps_2026_2.xlsx",
         fileType: .cours
     )
     

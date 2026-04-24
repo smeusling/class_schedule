@@ -162,7 +162,7 @@ struct HomeView: View {
                 }
             }
             .navigationBarHidden(true)
-            .sheet(isPresented: $viewModel.showCursusSelector) {
+            .fullScreenCover(isPresented: $viewModel.showCursusSelector) {
                 VoleeOnlySelector(viewModel: viewModel)
             }
         }
