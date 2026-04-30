@@ -1,0 +1,102 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : ""
+      }
+    ]
+  },
+  "identifier" : "4DA3BAB8",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "0.99",
+      "familyShareable" : false,
+      "internalID" : "6764065618",
+      "localizations" : [
+        {
+          "description" : "Soutenez le développement de l'application",
+          "displayName" : "Petit don",
+          "locale" : "fr"
+        }
+      ],
+      "productID" : "ch.smeusling.HorairesCours.don1",
+      "referenceName" : "Don 1 CHF",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "9.99",
+      "familyShareable" : false,
+      "internalID" : "6764066651",
+      "localizations" : [
+        {
+          "description" : "Soutenez le développement de l'application",
+          "displayName" : "Petit don",
+          "locale" : "fr"
+        }
+      ],
+      "productID" : "ch.smeusling.HorairesCours.don10",
+      "referenceName" : "Don 10 chf",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "1.99",
+      "familyShareable" : false,
+      "internalID" : "6764066229",
+      "localizations" : [
+        {
+          "description" : "Soutenez le développement de l'application",
+          "displayName" : "Petit don",
+          "locale" : "fr"
+        }
+      ],
+      "productID" : "ch.smeusling.HorairesCours.don2",
+      "referenceName" : "Don 2 CHF",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "5.99",
+      "familyShareable" : false,
+      "internalID" : "6764066272",
+      "localizations" : [
+        {
+          "description" : "Soutenez le développement de l'application",
+          "displayName" : "Petit don",
+          "locale" : "fr"
+        }
+      ],
+      "productID" : "ch.smeusling.HorairesCours.don5",
+      "referenceName" : "Don 5 CHF",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "6755431741",
+    "_askToBuyEnabled" : false,
+    "_billingGracePeriodEnabled" : false,
+    "_billingIssuesEnabled" : false,
+    "_developerTeamID" : "KA8566AL49",
+    "_disableDialogs" : false,
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 798991467.05043101,
+    "_locale" : "en_US",
+    "_renewalBillingIssuesEnabled" : false,
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ],
+    "_timeRate" : 0
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}
