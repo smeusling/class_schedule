@@ -50,10 +50,10 @@ struct DataSource: Codable {
     )
     
     static let examensPrintemps = DataSource(
-        type: .examens,
-        url: "https://www.unil.ch/files/live/sites/fbm/files/06-espaces/sciences-infirmieres/20260421_Horaire_Examens_P26.xlsx",
-        fileType: .examens
-    )
+            type: .examens,
+            url: "https://www.unil.ch/files/live/sites/fbm/files/06-espaces/sciences-infirmieres/20260611_horaire_examens_p26.xlsx",
+            fileType: .examens
+        )
     
     // Rétrocompatibilité : pointe vers examensAutomne par défaut
     static var examens: DataSource { examensAutomne }
@@ -99,7 +99,10 @@ struct DataSource: Codable {
                 let formatter = DateFormatter()
                 formatter.dateFormat = "yyyyMMdd"
                 let dateString = formatter.string(from: date)
+                // L'UNIL a changé la casse du nom de fichier (Horaire_Examens_P26 -> horaire_examens_p26)
+                // On teste les deux variantes pour ne rien manquer
                 urls.append("\(baseURL)\(dateString)_Horaire_Examens_P26.xlsx")
+                urls.append("\(baseURL)\(dateString)_horaire_examens_p26.xlsx")
             }
         }
         return urls
@@ -230,9 +233,9 @@ class DataSourceManager {
         var mostRecentURL: String?
         var mostRecentDate: Date?
         
-        LogManager.shared.log("🔎 Test de \(min(candidates.count, 30)) URLs candidates...")
+        LogManager.shared.log("🔎 Test de \(min(candidates.count, 60)) URLs candidates...")
         
-        for (index, candidateURL) in candidates.prefix(30).enumerated() {
+        for (index, candidateURL) in candidates.prefix(60).enumerated() {
             if let lastModified = await getLastModifiedDate(candidateURL) {
                 LogManager.shared.log("  [\(index)] ✅ \(candidateURL.components(separatedBy: "/").last ?? "") - \(formatDate(lastModified))")
                 if mostRecentDate == nil || lastModified > mostRecentDate! {
