@@ -30,10 +30,10 @@ struct DataSource: Codable {
     let fileType: FileType
     
     private static let baseURL = "https://www.unil.ch/files/live/sites/fbm/files/06-espaces/sciences-infirmieres/"
-    
+        
     static let semestreAutomne = DataSource(
         type: .semestre,
-        url: "https://www.unil.ch/files/live/sites/fbm/files/06-espaces/sciences-infirmieres/20251106_Horaire_Automne_2025.xlsx",
+        url: "https://www.unil.ch/files/live/sites/fbm/files/06-espaces/sciences-infirmieres/20260803_horaire_automne_2026.xlsx",
         fileType: .cours
     )
     
@@ -119,7 +119,7 @@ struct DataSource: Codable {
                 let formatter = DateFormatter()
                 formatter.dateFormat = "yyyyMMdd"
                 let dateString = formatter.string(from: date)
-                urls.append("\(baseURL)\(dateString)_Horaire_Automne_2025.xlsx")
+                urls.append("\(baseURL)\(dateString)_horaire_automne_2026.xlsx")
             }
         }
         return urls

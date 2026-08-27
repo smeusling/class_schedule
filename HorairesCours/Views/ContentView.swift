@@ -85,5 +85,10 @@ struct ContentView: View {
         } message: {
             Text(viewModel.updateAlertMessage)
         }
+        .alert("Volée introuvable", isPresented: $viewModel.showVoleeObsoleteAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.voleeObsoleteMessage)
+        }
     }
 }

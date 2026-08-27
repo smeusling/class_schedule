@@ -39,6 +39,8 @@ class ScheduleViewModel: ObservableObject {
     @Published var currentFileType: FileType = .cours
     @Published var showUpdateAlert = false
     @Published var updateAlertMessage = ""
+    @Published var showVoleeObsoleteAlert = false
+    @Published var voleeObsoleteMessage = ""
 
     // MARK: - Private properties
 
@@ -173,6 +175,22 @@ class ScheduleViewModel: ObservableObject {
     }
 
     func refreshData() async {
+        // Recharge toujours la liste des volées avant les horaires : si l'UNIL a publié
+        // un nouveau fichier, les volées disponibles peuvent avoir changé
+        // (ex: "IPS 8-25" → "IPS 2026").
+        await loadCursusList()
+
+        if let selectedVolee = selectedVolee, !availableVolees.isEmpty, !availableVolees.contains(selectedVolee) {
+            // La volée sélectionnée n'existe plus dans le fichier le plus récent
+            voleeObsoleteMessage = "Votre volée « \(selectedVolee) » n'existe plus dans le fichier actuel de l'UNIL. Veuillez en sélectionner une nouvelle."
+            showVoleeObsoleteAlert = true
+            self.selectedVolee = nil
+            self.selectedOption = nil
+            schedules = []
+            showHomeView = true
+            return
+        }
+
         await loadData(forceRefresh: true)
     }
 
