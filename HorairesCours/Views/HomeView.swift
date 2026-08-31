@@ -5,13 +5,18 @@ import SwiftUI
 struct HomeView: View {
     @ObservedObject var viewModel: ScheduleViewModel
     @State private var selectedDataSource: DataSourceType
+    @State private var selectedSemestreType: SemestreType
     @State private var showInfoPanel = false
     @State private var showDonationInPanel = false
     @StateObject private var storeManager = StoreManager()
     
+    private let headerHeight: CGFloat = 300
+    private let bottomZoneHeight: CGFloat = 150
+    
     init(viewModel: ScheduleViewModel) {
         self.viewModel = viewModel
         _selectedDataSource = State(initialValue: viewModel.currentDataSource.type)
+        _selectedSemestreType = State(initialValue: SemestreType.current())
     }
     
     func getDeviceModel() -> String {
@@ -52,14 +57,14 @@ struct HomeView: View {
     }
     
     private func validateAndContinue() {
-        let source = DataSource.automatic(for: selectedDataSource)
-        viewModel.setDataSource(source)
-        if viewModel.selectedModalites.isEmpty {
-            viewModel.selectedModalites = [.tempsPlein]
+            let source = DataSource.source(for: selectedDataSource, semestre: selectedSemestreType)
+            viewModel.setDataSource(source)
+            if viewModel.selectedModalites.isEmpty {
+                viewModel.selectedModalites = [.tempsPlein]
+            }
+            viewModel.showHomeView = false
+            Task { await viewModel.loadData(forceRefresh: true) }
         }
-        viewModel.showHomeView = false
-        Task { await viewModel.loadData(forceRefresh: true) }
-    }
     
     var body: some View {
         NavigationView {
@@ -74,7 +79,7 @@ struct HomeView: View {
                             Image("TopBar")
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: geometry.size.width, height: 400)
+                                .frame(width: geometry.size.width, height: headerHeight)
                                 .clipped()
                                 .clipShape(RoundedCorner(radius: 50, corners: [.bottomLeft, .bottomRight]))
                             
@@ -84,7 +89,7 @@ struct HomeView: View {
                                     .resizable()
                                     .scaledToFit()
                                     .frame(width: 70, height: 70)
-                                Spacer().frame(height: 70)
+                                Spacer().frame(height: 30)
                                 Text("Horaires de Cours")
                                     .font(.system(size: 26, weight: .bold))
                                     .foregroundColor(.white)
@@ -92,11 +97,11 @@ struct HomeView: View {
                                 Text("UNIL - Sciences Infirmières")
                                     .font(.system(size: 14))
                                     .foregroundColor(.white.opacity(0.85))
-                                Spacer().frame(height: 50)
+                                Spacer().frame(height: 20)
                             }
-                            .frame(width: geometry.size.width, height: 400)
+                            .frame(width: geometry.size.width, height: headerHeight)
                         }
-                        .frame(height: 400)
+                        .frame(height: headerHeight)
                         .ignoresSafeArea(edges: .top)
                         
                         // ── Zone verte ─────────────────────────────────────
@@ -169,11 +174,35 @@ struct HomeView: View {
                             }
                             .padding(.horizontal)
                             
+                            // Section Période
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Période")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.gray)
+                                    .textCase(.uppercase)
+                                    .padding(.horizontal, 4)
+                                
+                                VStack(spacing: 10) {
+                                    DataSourceRadioButton(
+                                        title: "Printemps",
+                                        icon: "leaf.fill",
+                                        isSelected: selectedSemestreType == .printemps
+                                    ) { selectedSemestreType = .printemps }
+                                    
+                                    DataSourceRadioButton(
+                                        title: "Automne",
+                                        icon: "wind",
+                                        isSelected: selectedSemestreType == .automne
+                                    ) { selectedSemestreType = .automne }
+                                }
+                            }
+                            .padding(.horizontal)
+                            
                             Spacer()
                         }
-                        .frame(height: geometry.size.height - 400 - 150)
+                        .frame(maxHeight: .infinity)
                         
-                        Spacer().frame(height: 150)
+                        Spacer().frame(height: bottomZoneHeight)
                     }
                     
                     // ── Bouton Valider flottant ────────────────────────────

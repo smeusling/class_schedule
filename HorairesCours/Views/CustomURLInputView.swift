@@ -154,6 +154,7 @@ struct CustomURLInputView: View {
                     
                     let customSource = DataSource(
                         type: sourceType,
+                        semestre: SemestreType.current(),
                         url: customURL,
                         fileType: selectedFileType
                     )

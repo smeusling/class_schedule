@@ -57,7 +57,7 @@ class ScheduleViewModel: ObservableObject {
     }
 
     var currentSemestreName: String {
-        currentDataSource.type == .examens ? "Examens" : "Semestre \(SemestreType.current().rawValue)"
+        currentDataSource.type == .examens ? "Examens" : "Semestre \(currentDataSource.semestre.rawValue)"
     }
 
     // MARK: - Setup
@@ -117,8 +117,8 @@ class ScheduleViewModel: ObservableObject {
         do {
             let mostRecentURL: String?
             switch currentDataSource.type {
-            case .examens:  mostRecentURL = await DataSourceManager.getMostRecentExamenURL()
-            case .semestre: mostRecentURL = await DataSourceManager.getMostRecentSemestreURL()
+            case .examens:  mostRecentURL = await DataSourceManager.getMostRecentExamenURL(for: currentDataSource.semestre)
+            case .semestre: mostRecentURL = await DataSourceManager.getMostRecentSemestreURL(for: currentDataSource.semestre)
             }
 
             guard let urlString = mostRecentURL, let url = URL(string: urlString) else {
@@ -201,8 +201,8 @@ class ScheduleViewModel: ObservableObject {
 
         do {
             // Toujours charger les volées depuis le fichier de semestre (même si l'utilisateur est en mode Examens)
-            guard let urlString = await DataSourceManager.getMostRecentSemestreURL(),
-                  let url = URL(string: urlString) else {
+            guard let urlString = await DataSourceManager.getMostRecentSemestreURL(for: currentDataSource.semestre),
+                              let url = URL(string: urlString) else {
                 throw NSError(domain: "DataSourceError", code: -1, userInfo: [
                     NSLocalizedDescriptionKey: "Impossible de trouver le fichier sur le serveur"
                 ])
@@ -231,10 +231,9 @@ class ScheduleViewModel: ObservableObject {
 
         let mostRecentURL: String?
         switch currentDataSource.type {
-        case .examens:  mostRecentURL = await DataSourceManager.getMostRecentExamenURL()
-        case .semestre: mostRecentURL = await DataSourceManager.getMostRecentSemestreURL()
+        case .examens:  mostRecentURL = await DataSourceManager.getMostRecentExamenURL(for: currentDataSource.semestre)
+        case .semestre: mostRecentURL = await DataSourceManager.getMostRecentSemestreURL(for: currentDataSource.semestre)
         }
-
         guard let urlString = mostRecentURL, let url = URL(string: urlString) else { return }
 
         do {

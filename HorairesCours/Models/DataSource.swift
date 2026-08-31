@@ -26,6 +26,7 @@ enum SemestreType: String, Codable {
 
 struct DataSource: Codable {
     let type: DataSourceType
+    let semestre: SemestreType
     let url: String
     let fileType: FileType
     
@@ -33,24 +34,28 @@ struct DataSource: Codable {
         
     static let semestreAutomne = DataSource(
         type: .semestre,
+        semestre: .automne,
         url: "https://www.unil.ch/files/live/sites/fbm/files/06-espaces/sciences-infirmieres/20260803_horaire_automne_2026.xlsx",
         fileType: .cours
     )
     
     static let semestrePrintemps = DataSource(
         type: .semestre,
+        semestre: .printemps,
         url: "https://www.unil.ch/files/live/sites/fbm/files/06-espaces/sciences-infirmieres/20260330_Horaire_Printemps_2026_2.xlsx",
         fileType: .cours
     )
     
     static let examensAutomne = DataSource(
         type: .examens,
+        semestre: .automne,
         url: "https://www.unil.ch/files/live/sites/fbm/files/06-espaces/sciences-infirmieres/20251202_Horaire_Examens_A25.xlsx",
         fileType: .examens
     )
     
     static let examensPrintemps = DataSource(
             type: .examens,
+            semestre: .printemps,
             url: "https://www.unil.ch/files/live/sites/fbm/files/06-espaces/sciences-infirmieres/20260611_horaire_examens_p26.xlsx",
             fileType: .examens
         )
@@ -65,6 +70,16 @@ struct DataSource: Codable {
             return SemestreType.current() == .printemps ? semestrePrintemps : semestreAutomne
         case .examens:
             return SemestreType.current() == .printemps ? examensPrintemps : examensAutomne
+        }
+    }
+    
+    // Obtenir la source pour un type ET une période choisis explicitement, indépendant de la date de l'appareil
+    static func source(for type: DataSourceType, semestre: SemestreType) -> DataSource {
+        switch type {
+        case .semestre:
+            return semestre == .printemps ? semestrePrintemps : semestreAutomne
+        case .examens:
+            return semestre == .printemps ? examensPrintemps : examensAutomne
         }
     }
     
@@ -155,18 +170,18 @@ class DataSourceManager {
     private static let cachedPrintempsDateKey = "cachedPrintempsDate"
     private static let cachedExamensPrintempsDateKey = "cachedExamensPrintempsDate"
     
-    // Récupérer l'URL pour le semestre actuel
-    static func getMostRecentSemestreURL() async -> String? {
-        LogManager.shared.log("📅 Semestre actuel détecté: \(SemestreType.current().rawValue)")
-        switch SemestreType.current() {
+    // Récupérer l'URL pour la période demandée (par défaut, la période actuelle selon l'appareil)
+    static func getMostRecentSemestreURL(for semestre: SemestreType = SemestreType.current()) async -> String? {
+        LogManager.shared.log("📅 Semestre demandé: \(semestre.rawValue)")
+        switch semestre {
         case .automne:   return await getMostRecentAutomneURL()
         case .printemps: return await getMostRecentPrintempsURL()
         }
     }
     
-    // Récupérer l'URL la plus récente pour les examens (selon la période courante)
-    static func getMostRecentExamenURL() async -> String? {
-        switch SemestreType.current() {
+    // Récupérer l'URL la plus récente pour les examens de la période demandée
+    static func getMostRecentExamenURL(for semestre: SemestreType = SemestreType.current()) async -> String? {
+        switch semestre {
         case .automne:   return await getMostRecentExamensAutomneURL()
         case .printemps: return await getMostRecentExamensPrintempsURL()
         }
