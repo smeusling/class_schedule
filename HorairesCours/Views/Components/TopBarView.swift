@@ -47,6 +47,19 @@ struct TopBarView: View {
             
             Spacer()
             
+            // ── Bouton "Tout" ───────────────────────────────────────
+            Button(action: {
+                viewModel.showAllCourses.toggle()
+            }) {
+                Text("Tout")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(viewModel.showAllCourses ? Color(red: 116/255, green: 118/255, blue: 216/255) : .white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(viewModel.showAllCourses ? Color.white : Color.white.opacity(0.2))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
             // ── Icône toggle vue ───────────────────────────────────
             Button(action: {
                 viewModel.selectedView = viewModel.selectedView == .week ? .list : .week

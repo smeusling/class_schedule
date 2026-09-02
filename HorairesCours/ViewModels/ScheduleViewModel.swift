@@ -29,6 +29,7 @@ class ScheduleViewModel: ObservableObject {
     @Published var selectedCourse: String = ""
     @Published var selectedView: ViewType = .week
     @Published var selectedDate = Date()
+    @Published var showAllCourses: Bool = false
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var lastUpdateDate: Date?
@@ -54,6 +55,10 @@ class ScheduleViewModel: ObservableObject {
         Dictionary(grouping: filteredSchedules) { schedule in
             Calendar.current.startOfDay(for: schedule.date)
         }
+    }
+    
+    var sortedDatesWithCourses: [Date] {
+        groupedByDate.keys.sorted()
     }
 
     var currentSemestreName: String {

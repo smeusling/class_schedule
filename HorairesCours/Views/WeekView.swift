@@ -25,20 +25,35 @@ struct WeekView: View {
         let end = calendar.date(byAdding: .day, value: 6, to: weekInterval.start)!
         return "\(start) - \(formatter.string(from: end))"
     }
+    
+    var datesToShow: [Date] {
+        viewModel.showAllCourses ? viewModel.sortedDatesWithCourses : weekDays
+    }
+    
+    var emptyMessage: String {
+        let isExamen = viewModel.currentFileType == .examens
+        if viewModel.showAllCourses {
+            return isExamen ? "Aucun examen" : "Aucun cours"
+        }
+        return isExamen ? "Aucun examen cette semaine" : "Aucun cours cette semaine"
+    }
 
     var body: some View {
         VStack(spacing: 0) {
 
-            // ── Header semaine avec navigation ─────────────────────
-            WeekNavigationHeader(viewModel: viewModel)
-
+            // ── Header (navigation semaine, ou titre en mode "Tout") ─
+            if viewModel.showAllCourses {
+                AllCoursesHeader()
+            } else {
+                WeekNavigationHeader(viewModel: viewModel)
+            }
             if viewModel.schedules.isEmpty {
                 Spacer()
                 VStack(spacing: 16) {
                     Image(systemName: "calendar.badge.clock")
                         .font(.system(size: 50))
                         .foregroundColor(.gray)
-                    Text(viewModel.currentFileType == .examens ? "Aucun examen cette semaine" : "Aucun cours cette semaine")
+                    Text(emptyMessage)
                         .foregroundColor(.gray)
                     PrimaryButton(title: "Choisir une volée") { viewModel.changeCursus() }
                         .padding(.horizontal, 40)
@@ -47,12 +62,13 @@ struct WeekView: View {
             } else {
                 ScrollView {
                     VStack(spacing: 1) {
-                        ForEach(weekDays.indices, id: \.self) { index in
+                        ForEach(datesToShow.indices, id: \.self) { index in
                             WeekDayRow(
-                                date: weekDays[index],
-                                schedules: viewModel.groupedByDate[Calendar.current.startOfDay(for: weekDays[index])] ?? [],
+                                date: datesToShow[index],
+                                schedules: viewModel.groupedByDate[Calendar.current.startOfDay(for: datesToShow[index])] ?? [],
                                 isExamen: viewModel.currentFileType == .examens,
-                                isLast: index == weekDays.count - 1
+                                isLast: index == datesToShow.count - 1,
+                                showMonth: viewModel.showAllCourses
                             )
                         }
                     }
@@ -71,6 +87,7 @@ struct WeekView: View {
         let schedules: [CourseSchedule]
         let isExamen: Bool
         let isLast: Bool
+        let showMonth: Bool
 
         var sortedSchedules: [CourseSchedule] {
             schedules.sorted { extractStartTime(from: $0.heure) < extractStartTime(from: $1.heure) }
@@ -98,6 +115,13 @@ struct WeekView: View {
             f.dateFormat = "d"
             return f.string(from: date)
         }
+        
+        var monthName: String {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "fr_FR")
+            f.dateFormat = "MMM"
+            return f.string(from: date).uppercased()
+        }
 
         var isToday: Bool {
             Calendar.current.isDateInToday(date)
@@ -121,6 +145,12 @@ struct WeekView: View {
                         Text(dayNumber)
                             .font(.system(size: 24, weight: .bold))
                             .foregroundColor(isToday ? .white : .black)
+                    }
+
+                    if showMonth {
+                        Text(monthName)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(isToday ? Color(hex: "7B6FE8") : .gray)
                     }
                 }
                 .frame(width: 52)

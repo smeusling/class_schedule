@@ -25,19 +25,35 @@ struct ListView: View {
         let end = calendar.date(byAdding: .day, value: 6, to: weekInterval.start)!
         return "\(start) - \(formatter.string(from: end))"
     }
+    
+    var datesToShow: [Date] {
+        viewModel.showAllCourses ? viewModel.sortedDatesWithCourses : weekDays
+    }
+    
+    var emptyMessage: String {
+        let isExamen = viewModel.currentFileType == .examens
+        if viewModel.showAllCourses {
+            return isExamen ? "Aucun examen" : "Aucun cours"
+        }
+        return isExamen ? "Aucun examen cette semaine" : "Aucun cours cette semaine"
+    }
 
     var body: some View {
         VStack(spacing: 0) {
 
-            // ── Header semaine avec navigation ─────────────────────
-            WeekNavigationHeader(viewModel: viewModel)
+            // ── Header (navigation semaine, ou titre en mode "Tout") ─
+            if viewModel.showAllCourses {
+                AllCoursesHeader()
+            } else {
+                WeekNavigationHeader(viewModel: viewModel)
+            }
             if viewModel.schedules.isEmpty {
                 Spacer()
                 VStack(spacing: 16) {
                     Image(systemName: "calendar.badge.clock")
                         .font(.system(size: 50))
                         .foregroundColor(.gray)
-                    Text(viewModel.currentFileType == .examens ? "Aucun examen cette semaine" : "Aucun cours cette semaine")
+                    Text(emptyMessage)
                         .foregroundColor(.gray)
                     PrimaryButton(title: "Choisir une volée") { viewModel.changeCursus() }
                         .padding(.horizontal, 40)
@@ -46,7 +62,7 @@ struct ListView: View {
             } else {
                 ScrollView {
                     VStack(spacing: 0) {
-                        ForEach(weekDays, id: \.self) { date in
+                        ForEach(datesToShow, id: \.self) { date in
                             DaySection(
                                 date: date,
                                 schedules: viewModel.groupedByDate[Calendar.current.startOfDay(for: date)] ?? [],
