@@ -31,6 +31,7 @@ struct ContentView: View {
                             ErrorView(message: error) {
                                 Task { await viewModel.refreshData() }
                             }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
                             // Bannière avant le contenu
                             if viewModel.lastUpdateDate != nil {

@@ -310,13 +310,19 @@ class ExcelParser {
         }
 
         if fileType == .cours {
-            // La colonne "Cours" n'a pas de titre : elle est juste avant "Contenu"
-            if columnMap["cours"] == nil, let contenuIndex = columnMap["contenu"] {
-                columnMap["cours"] = contenuIndex - 1
-            }
             // La colonne "Cursus" n'a pas de titre : elle est juste avant "Option"
             if let optionIndex = columnMap["option"] {
                 columnMap["cursus"] = optionIndex - 1
+            }
+            // La colonne "Cours" n'a pas de titre :
+            // - juste avant "Contenu du cours" quand cette colonne existe (structure avec contenu)
+            // - sinon juste avant "Cursus"/"Volée" (structure sans "Contenu du cours", cas actuel)
+            if columnMap["cours"] == nil {
+                if let contenuIndex = columnMap["contenu"] {
+                    columnMap["cours"] = contenuIndex - 1
+                } else if let cursusIndex = columnMap["cursus"] {
+                    columnMap["cours"] = cursusIndex - 1
+                }
             }
         }
         LogManager.shared.log("📋 columnMap: \(columnMap)")
@@ -358,7 +364,7 @@ class ExcelParser {
         let heureDebutCol   = columnMap["heure début"] ?? 2
         let heureFinCol     = columnMap["heure fin"] ?? 3
         let nombrePeriodeCol = columnMap["nombre période"] ?? 4
-        let contenuCol      = columnMap["contenu"] ?? 6
+        let contenuCol: Int? = columnMap["contenu"]
         let cursusCol       = columnMap["cursus"] ?? 7
         let optionCol       = columnMap["option"] ?? 8
         let enseignantCol   = columnMap["enseignant"] ?? 9
@@ -379,7 +385,7 @@ class ExcelParser {
             let heureFin      = getCellValueOptimized(cells, at: heureFinCol, sharedStrings: sharedStrings) ?? ""
             let nombrePeriode = getCellValueOptimized(cells, at: nombrePeriodeCol, sharedStrings: sharedStrings) ?? ""
             let cours         = getCellValueOptimized(cells, at: coursCol, sharedStrings: sharedStrings) ?? ""
-            let contenuCours  = getCellValueOptimized(cells, at: contenuCol, sharedStrings: sharedStrings) ?? ""
+            let contenuCours  = contenuCol.flatMap { getCellValueOptimized(cells, at: $0, sharedStrings: sharedStrings) } ?? ""
             let cursus        = getCellValueOptimized(cells, at: cursusCol, sharedStrings: sharedStrings) ?? ""
             let option        = getCellValueOptimized(cells, at: optionCol, sharedStrings: sharedStrings) ?? ""
             let enseignant    = getCellValueOptimized(cells, at: enseignantCol, sharedStrings: sharedStrings) ?? ""
