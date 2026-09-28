@@ -60,19 +60,27 @@ struct ListView: View {
                 }
                 Spacer()
             } else {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(datesToShow, id: \.self) { date in
-                            DaySection(
-                                date: date,
-                                schedules: viewModel.groupedByDate[Calendar.current.startOfDay(for: date)] ?? [],
-                                isExamen: viewModel.currentFileType == .examens
-                            )
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(datesToShow, id: \.self) { date in
+                                DaySection(
+                                    date: date,
+                                    schedules: viewModel.groupedByDate[Calendar.current.startOfDay(for: date)] ?? [],
+                                    isExamen: viewModel.currentFileType == .examens
+                                )
+                            }
                         }
+                        .padding(.bottom, 80)
                     }
-                    .padding(.bottom, 80)
+                    .background(Color.white)
+                    .task(id: "\(viewModel.showAllCourses)-\(viewModel.schedules.count)") {
+                        guard viewModel.showAllCourses, let target = viewModel.scrollTargetDateInAll else { return }
+                        // Laisse SwiftUI terminer la mise en page avant de défiler
+                        try? await Task.sleep(nanoseconds: 50_000_000)
+                        proxy.scrollTo(target, anchor: .top)
+                    }
                 }
-                .background(Color.white)
             }
         }
         .background(Color.white)

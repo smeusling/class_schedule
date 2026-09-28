@@ -60,21 +60,31 @@ struct WeekView: View {
                 }
                 Spacer()
             } else {
-                ScrollView {
-                    VStack(spacing: 1) {
-                        ForEach(datesToShow.indices, id: \.self) { index in
-                            WeekDayRow(
-                                date: datesToShow[index],
-                                schedules: viewModel.groupedByDate[Calendar.current.startOfDay(for: datesToShow[index])] ?? [],
-                                isExamen: viewModel.currentFileType == .examens,
-                                isLast: index == datesToShow.count - 1,
-                                showMonth: viewModel.showAllCourses
-                            )
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 1) {
+                            ForEach(datesToShow.indices, id: \.self) { index in
+                                WeekDayRow(
+                                    date: datesToShow[index],
+                                    schedules: viewModel.groupedByDate[Calendar.current.startOfDay(for: datesToShow[index])] ?? [],
+                                    isExamen: viewModel.currentFileType == .examens,
+                                    isLast: index == datesToShow.count - 1,
+                                    showMonth: viewModel.showAllCourses
+                                )
+                            }
                         }
+                        .padding(.bottom, 80)
                     }
-                    .padding(.bottom, 80)
+                    .background(Color.white)
+                    .task(id: "\(viewModel.showAllCourses)-\(viewModel.schedules.count)") {
+                        guard viewModel.showAllCourses,
+                              let target = viewModel.scrollTargetDateInAll,
+                              let targetIndex = datesToShow.firstIndex(of: target) else { return }
+                        // Laisse SwiftUI terminer la mise en page avant de défiler
+                        try? await Task.sleep(nanoseconds: 50_000_000)
+                        proxy.scrollTo(targetIndex, anchor: .top)
+                    }
                 }
-                .background(Color.white)
             }
         }
         .background(Color.white)

@@ -61,6 +61,13 @@ class ScheduleViewModel: ObservableObject {
     var sortedDatesWithCourses: [Date] {
         groupedByDate.keys.sorted()
     }
+    
+    // Premier jour de cours à partir d'aujourd'hui (sinon le dernier jour de cours),
+    // utilisé pour positionner la vue "Tout" à l'ouverture
+    var scrollTargetDateInAll: Date? {
+        let today = Calendar.current.startOfDay(for: Date())
+        return sortedDatesWithCourses.first(where: { $0 >= today }) ?? sortedDatesWithCourses.last
+    }
 
     var currentSemestreName: String {
         currentDataSource.type == .examens ? "Examens" : "Semestre \(SemestreType.current().rawValue)"
@@ -71,7 +78,7 @@ class ScheduleViewModel: ObservableObject {
     func setup(modelContext: ModelContext) {
         storageManager = StorageManager(modelContext: modelContext)
         lastUpdateDate = storageManager?.getLastUpdateDate()
-        fileDate = storageManager?.getExcelHeaderDate() ?? storageManager?.getFileModificationDate()
+        fileDate = storageManager?.getFileModificationDate() ?? storageManager?.getExcelHeaderDate()
 
         loadVoleePreference()
         loadModalitesPreference()
@@ -166,7 +173,11 @@ class ScheduleViewModel: ObservableObject {
             try storageManager.saveSchedules(parsed)
             storageManager.setLastUpdateDate(Date())
             lastUpdateDate = Date()
-            fileDate = headerDate ?? serverDate
+            fileDate = serverDate ?? headerDate
+            if let serverDate, let headerDate,
+               abs(serverDate.timeIntervalSince(headerDate)) > 7 * 24 * 3600 {
+                LogManager.shared.log("⚠️ Date écrite dans le fichier (\(headerDate)) très différente de la date serveur (\(serverDate)), la date serveur est utilisée")
+            }
             LogManager.shared.log("📄 Fichier chargé: \(urlString.components(separatedBy: "/").last ?? "") | date en-tête: \(headerDate.map { "\($0)" } ?? "aucune") | Last-Modified: \(serverDate.map { "\($0)" } ?? "aucune")")
             schedules = parsed
             courses = Array(Set(parsed.map { $0.cours })).sorted()
