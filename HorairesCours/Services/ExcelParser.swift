@@ -803,12 +803,14 @@ class ExcelParser {
 
         for (index, _) in firstRow.cells.enumerated() {
             guard let value = getCellValueOptimized(firstRow.cells, at: index, sharedStrings: sharedStrings),
-                  value.contains("2025") || value.contains("2024"),
                   let dateMatch = value.range(of: "\\d{2}\\.\\d{2}\\.\\d{4}", options: .regularExpression) else { continue }
 
             let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
             formatter.dateFormat = "dd.MM.yyyy"
-            return formatter.date(from: String(value[dateMatch]))
+            if let date = formatter.date(from: String(value[dateMatch])) {
+                return date
+            }
         }
 
         return nil

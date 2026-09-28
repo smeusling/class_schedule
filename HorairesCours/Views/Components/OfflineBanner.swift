@@ -4,6 +4,7 @@ import SwiftUI
 
 struct OfflineBanner: View {
     let lastUpdate: Date?
+    var fileDate: Date? = nil
     let isOffline: Bool
     let onRefresh: () -> Void
     
@@ -13,6 +14,14 @@ struct OfflineBanner: View {
         formatter.dateStyle = .short
         formatter.timeStyle = .short
         formatter.locale = Locale(identifier: "fr_FR")
+        return formatter.string(from: date)
+    }
+    
+    var formattedFileDate: String? {
+        guard let date = fileDate else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateFormat = "dd.MM.yyyy"
         return formatter.string(from: date)
     }
     
@@ -27,6 +36,12 @@ struct OfflineBanner: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.black)
                     
+                    if let fileDateText = formattedFileDate {
+                        Text("Fichier du \(fileDateText)")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(white: 0.4))
+                    }
+                    
                     Text("Dernière mise à jour: \(formattedDate)")
                         .font(.system(size: 12))
                         .foregroundColor(Color(white: 0.5))
@@ -40,7 +55,13 @@ struct OfflineBanner: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.black)
                     
-                    Text("Mis à jour: \(formattedDate)")
+                    if let fileDateText = formattedFileDate {
+                        Text("Fichier du \(fileDateText)")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(white: 0.4))
+                    }
+                    
+                    Text("Chargé le \(formattedDate)")
                         .font(.system(size: 11))
                         .foregroundColor(Color(white: 0.7))
                 }

@@ -33,6 +33,7 @@ class ScheduleViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var lastUpdateDate: Date?
+    @Published var fileDate: Date?
     @Published var isOfflineMode = false
     @Published var showCursusSelector = false
     @Published var showHomeView = false
@@ -70,6 +71,7 @@ class ScheduleViewModel: ObservableObject {
     func setup(modelContext: ModelContext) {
         storageManager = StorageManager(modelContext: modelContext)
         lastUpdateDate = storageManager?.getLastUpdateDate()
+        fileDate = storageManager?.getExcelHeaderDate() ?? storageManager?.getFileModificationDate()
 
         loadVoleePreference()
         loadModalitesPreference()
@@ -138,21 +140,20 @@ class ScheduleViewModel: ObservableObject {
                 throw URLError(.badServerResponse)
             }
 
-            // Sauvegarder la date de modification HTTP
+            // Date de modification HTTP (effacée si absente, pour ne pas garder celle d'un ancien fichier)
+            var serverDate: Date?
             if let lastModifiedString = httpResponse.value(forHTTPHeaderField: "Last-Modified") {
                 let dateFormatter = DateFormatter()
                 dateFormatter.locale = Locale(identifier: "en_US_POSIX")
                 dateFormatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
                 dateFormatter.timeZone = TimeZone(abbreviation: "GMT")
-                if let fileModificationDate = dateFormatter.date(from: lastModifiedString) {
-                    storageManager.setFileModificationDate(fileModificationDate)
-                }
+                serverDate = dateFormatter.date(from: lastModifiedString)
             }
+            storageManager.setFileModificationDate(serverDate)
 
-            // Sauvegarder la date dans l'en-tête Excel si disponible
-            if let excelHeaderDate = ExcelParser.extractUpdateDate(data) {
-                storageManager.setExcelHeaderDate(excelHeaderDate)
-            }
+            // Date écrite par l'UNIL dans l'en-tête du fichier (effacée si absente)
+            let headerDate = ExcelParser.extractUpdateDate(data)
+            storageManager.setExcelHeaderDate(headerDate)
 
             let parsed = try ExcelParser.parse(
                 data,
@@ -165,6 +166,8 @@ class ScheduleViewModel: ObservableObject {
             try storageManager.saveSchedules(parsed)
             storageManager.setLastUpdateDate(Date())
             lastUpdateDate = Date()
+            fileDate = headerDate ?? serverDate
+            LogManager.shared.log("📄 Fichier chargé: \(urlString.components(separatedBy: "/").last ?? "") | date en-tête: \(headerDate.map { "\($0)" } ?? "aucune") | Last-Modified: \(serverDate.map { "\($0)" } ?? "aucune")")
             schedules = parsed
             courses = Array(Set(parsed.map { $0.cours })).sorted()
 

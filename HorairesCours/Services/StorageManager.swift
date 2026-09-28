@@ -74,4 +74,12 @@ class StorageManager {
     func setExcelHeaderDate(_ date: Date) {
         UserDefaults.standard.set(date, forKey: "excelHeaderDate")
     }
+    
+    func setFileModificationDate(_ date: Date?) {
+        UserDefaults.standard.set(date, forKey: "fileModificationDate")
+    }
+    
+    func setExcelHeaderDate(_ date: Date?) {
+        UserDefaults.standard.set(date, forKey: "excelHeaderDate")
+    }
 }

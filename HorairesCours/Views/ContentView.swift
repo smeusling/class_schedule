@@ -37,6 +37,7 @@ struct ContentView: View {
                             if viewModel.lastUpdateDate != nil {
                                 OfflineBanner(
                                     lastUpdate: viewModel.lastUpdateDate,
+                                    fileDate: viewModel.fileDate,
                                     isOffline: viewModel.isOfflineMode,
                                     onRefresh: {
                                         Task { await viewModel.refreshData() }

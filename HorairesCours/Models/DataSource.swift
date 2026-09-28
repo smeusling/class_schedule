@@ -33,7 +33,7 @@ struct DataSource: Codable {
         
     static let semestreAutomne = DataSource(
         type: .semestre,
-        url: "https://www.unil.ch/files/live/sites/fbm/files/06-espaces/sciences-infirmieres/20260803_horaire_automne_2026.xlsx",
+        url: "https://www.unil.ch/files/live/sites/fbm/files/06-espaces/sciences-infirmieres/20262409_horaire_automne_2026.xlsx",
         fileType: .cours
     )
     
@@ -68,78 +68,59 @@ struct DataSource: Codable {
         }
     }
     
-    // Générer des URLs candidates pour les examens automne
-    static func generateExamenURLCandidates() -> [String] {
-        generateExamensAutomneCandidates()
+    // Formats de date utilisés par l'UNIL dans les noms de fichiers :
+    // AAAAMMJJ (ex. 20260918) et AAAAJJMM (ex. 20262409 = 24 septembre 2026)
+    private static let fileDateFormats = ["yyyyMMdd", "yyyyddMM"]
+
+    // Génère les URLs candidates pour chaque jour, chaque format de date et chaque suffixe,
+    // sans doublons (ex. le 9 septembre donne 20260909 dans les deux formats)
+    static func generateURLCandidates(suffixes: [String], daysBack: Int = 90) -> [String] {
+        let calendar = Calendar.current
+        let now = Date()
+
+        let formatters: [DateFormatter] = fileDateFormats.map { format in
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.dateFormat = format
+            return formatter
+        }
+
+        var urls: [String] = []
+        var seen = Set<String>()
+
+        for daysAgo in 0...daysBack {
+            guard let date = calendar.date(byAdding: .day, value: -daysAgo, to: now) else { continue }
+            for formatter in formatters {
+                let dateString = formatter.string(from: date)
+                for suffix in suffixes {
+                    let url = "\(baseURL)\(dateString)\(suffix)"
+                    if seen.insert(url).inserted {
+                        urls.append(url)
+                    }
+                }
+            }
+        }
+        return urls
     }
-    
+
     static func generateExamensAutomneCandidates() -> [String] {
-        var urls: [String] = []
-        let calendar = Calendar.current
-        let now = Date()
-        
-        for daysAgo in 0...90 {
-            if let date = calendar.date(byAdding: .day, value: -daysAgo, to: now) {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyyMMdd"
-                let dateString = formatter.string(from: date)
-                urls.append("\(baseURL)\(dateString)_Horaire_Examens_A25.xlsx")
-            }
-        }
-        return urls
+        generateURLCandidates(suffixes: ["_Horaire_Examens_A25.xlsx"])
     }
-    
+
     static func generateExamensPrintempsCandidates() -> [String] {
-        var urls: [String] = []
-        let calendar = Calendar.current
-        let now = Date()
-        
-        for daysAgo in 0...90 {
-            if let date = calendar.date(byAdding: .day, value: -daysAgo, to: now) {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyyMMdd"
-                let dateString = formatter.string(from: date)
-                // L'UNIL a changé la casse du nom de fichier (Horaire_Examens_P26 -> horaire_examens_p26)
-                // On teste les deux variantes pour ne rien manquer
-                urls.append("\(baseURL)\(dateString)_Horaire_Examens_P26.xlsx")
-                urls.append("\(baseURL)\(dateString)_horaire_examens_p26.xlsx")
-            }
-        }
-        return urls
+        // L'UNIL a changé la casse du nom de fichier (Horaire_Examens_P26 -> horaire_examens_p26)
+        generateURLCandidates(suffixes: ["_Horaire_Examens_P26.xlsx", "_horaire_examens_p26.xlsx"])
     }
-    
+
     // Générer des URLs candidates pour semestre automne
     static func generateAutomneURLCandidates() -> [String] {
-        var urls: [String] = []
-        let calendar = Calendar.current
-        let now = Date()
-        
-        for daysAgo in 0...90 {
-            if let date = calendar.date(byAdding: .day, value: -daysAgo, to: now) {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyyMMdd"
-                let dateString = formatter.string(from: date)
-                urls.append("\(baseURL)\(dateString)_horaire_automne_2026.xlsx")
-            }
-        }
-        return urls
+        generateURLCandidates(suffixes: ["_horaire_automne_2026.xlsx"])
     }
-    
+
     // Générer des URLs candidates pour semestre printemps
     static func generatePrintempsURLCandidates() -> [String] {
-        var urls: [String] = []
-        let calendar = Calendar.current
-        let now = Date()
-        
-        for daysAgo in 0...90 {
-            if let date = calendar.date(byAdding: .day, value: -daysAgo, to: now) {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyyMMdd"
-                let dateString = formatter.string(from: date)
-                urls.append("\(baseURL)\(dateString)_Horaire_Printemps_2026.xlsx")
-            }
-        }
-        return urls
+        generateURLCandidates(suffixes: ["_Horaire_Printemps_2026.xlsx"])
     }
 }
 
