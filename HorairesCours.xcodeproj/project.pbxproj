@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		97A5BF982F9F9713004EF14C /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 97A5BF972F9F9713004EF14C /* StoreKit.framework */; };
-		97B7330F2EC72D7D00CF11D8 /* CoreXLSX in Frameworks */ = {isa = PBXBuildFile; productRef = 97B7330E2EC72D7D00CF11D8 /* CoreXLSX */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,7 +41,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				97B7330F2EC72D7D00CF11D8 /* CoreXLSX in Frameworks */,
 				97A5BF982F9F9713004EF14C /* StoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -95,7 +93,6 @@
 			);
 			name = HorairesCours;
 			packageProductDependencies = (
-				97B7330E2EC72D7D00CF11D8 /* CoreXLSX */,
 			);
 			productName = HorairesCours;
 			productReference = 97B732FC2EC72B0F00CF11D8 /* HorairesCours.app */;
@@ -126,7 +123,6 @@
 			mainGroup = 97B732F32EC72B0F00CF11D8;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				97B7330D2EC72D7D00CF11D8 /* XCRemoteSwiftPackageReference "CoreXLSX" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 97B732FD2EC72B0F00CF11D8 /* Products */;
@@ -372,25 +368,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		97B7330D2EC72D7D00CF11D8 /* XCRemoteSwiftPackageReference "CoreXLSX" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/CoreOffice/CoreXLSX";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.14.2;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		97B7330E2EC72D7D00CF11D8 /* CoreXLSX */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 97B7330D2EC72D7D00CF11D8 /* XCRemoteSwiftPackageReference "CoreXLSX" */;
-			productName = CoreXLSX;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 97B732F42EC72B0F00CF11D8 /* Project object */;
 }
