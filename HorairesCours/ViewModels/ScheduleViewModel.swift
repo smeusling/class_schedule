@@ -10,11 +10,11 @@ class ScheduleViewModel: ObservableObject {
 
     @Published var schedules: [CourseSchedule] = []
     @Published var courses: [String] = []
-    /// Catalogue des volées renvoyé par l'API (GET /api/volees), utilisé pour les cours et les examens.
+    // Catalogue des volées renvoyé par l'API (GET /api/volees), utilisé pour les cours et les examens.
     @Published var voleeCatalog: [APIVolee] = []
-    /// Identifiant de modalité de l'API (ex. "tempsPartiel6"), nil si aucune choisie.
+    // Identifiant de modalité de l'API (ex. "tempsPartiel6"), nil si aucune choisie.
     @Published var selectedModaliteId: String? { didSet { saveModalitePreference() } }
-    /// Identifiant d'option de l'API (ex. "santeMentale"), nil si aucune choisie.
+    // Identifiant d'option de l'API (ex. "santeMentale"), nil si aucune choisie.
     @Published var selectedOptionId: String? { didSet { saveOptionPreference() } }
     @Published var selectedVolee: String? {
         didSet {
@@ -46,11 +46,11 @@ class ScheduleViewModel: ObservableObject {
     // MARK: - Private properties
 
     private var storageManager: StorageManager?
-    /// Semestre du catalogue chargé (le catalogue dépend du semestre).
+    // Semestre du catalogue chargé (le catalogue dépend du semestre).
     private var catalogSemestre: SemestreType?
 
-    /// Version du format des préférences de sélection.
-    /// 1 (avant l'API) : modalités "Temps Plein"/"Partiel", options en toutes lettres ; 2 : identifiants de l'API.
+    // Version du format des préférences de sélection.
+    // 1 (avant l'API) : modalités "Temps Plein"/"Partiel", options en toutes lettres ; 2 : identifiants de l'API.
     private static let selectionFormatVersion = 2
 
     // Libellés de secours quand le catalogue n'est pas encore chargé (lancement hors ligne).
@@ -97,23 +97,23 @@ class ScheduleViewModel: ObservableObject {
         return voleeCatalog.first { $0.volee == selectedVolee }
     }
 
-    /// Semestre demandé à l'API, selon la source et la date.
+    // Semestre demandé à l'API, selon la source et la date.
     var currentSemestre: SemestreType { SemestreType.current(for: currentDataSource.type) }
 
-    /// Modalité envoyée à l'API : l'unique modalité de la volée, ou le choix de l'étudiant s'il existe pour cette volée.
-    /// Catalogue pas encore chargé (lancement hors ligne) : le choix enregistré.
+    // Modalité envoyée à l'API : l'unique modalité de la volée, ou le choix de l'étudiant s'il existe pour cette volée.
+    // Catalogue pas encore chargé (lancement hors ligne) : le choix enregistré.
     var effectiveModaliteId: String? {
         guard let info = selectedVoleeInfo else { return selectedModaliteId }
         return Self.effectiveChoice(selectedModaliteId, among: info.modalites)
     }
 
-    /// Option envoyée à l'API, même règle que la modalité.
+    // Option envoyée à l'API, même règle que la modalité.
     var effectiveOptionId: String? {
         guard let info = selectedVoleeInfo else { return selectedOptionId }
         return Self.effectiveChoice(selectedOptionId, among: info.options)
     }
 
-    /// Sélection utilisable : volée connue, et un choix pour chaque section qui en propose au moins deux.
+    // Sélection utilisable : volée connue, et un choix pour chaque section qui en propose au moins deux.
     var isSelectionComplete: Bool {
         guard let info = selectedVoleeInfo else { return false }
         let modaliteOK = info.modalites.count <= 1 || effectiveModaliteId != nil
@@ -165,6 +165,23 @@ class ScheduleViewModel: ObservableObject {
             Task { await loadFromCache() }
         }
     }
+    
+    // MARK: - Semaine d'ouverture
+
+    // Semaine affichée à l'ouverture : celle du jour, sauf si le premier élément est dans une semaine
+    // plus tardive (examens de janvier consultés en novembre, cours avant la rentrée) :
+    // on ouvre alors sur la semaine du premier élément. Les flèches permettent de revenir en arrière.
+    private func applyOpeningWeek() {
+        let calendar = Calendar.current
+        let today = Date()
+        guard let first = sortedDatesWithCourses.first,
+              let todayWeek = calendar.dateInterval(of: .weekOfYear, for: today)?.start,
+              let firstWeek = calendar.dateInterval(of: .weekOfYear, for: first)?.start else {
+            selectedDate = today
+            return
+        }
+        selectedDate = firstWeek > todayWeek ? first : today
+    }
 
     // MARK: - Chargement des données
 
@@ -176,6 +193,7 @@ class ScheduleViewModel: ObservableObject {
             if !cachedSchedules.isEmpty {
                 schedules = cachedSchedules
                 courses = Array(Set(cachedSchedules.map { $0.cours })).sorted()
+                applyOpeningWeek()
                 if !courses.isEmpty && selectedCourse.isEmpty { selectedCourse = courses[0] }
                 isOfflineMode = true
             }
@@ -227,6 +245,7 @@ class ScheduleViewModel: ObservableObject {
             LogManager.shared.log("📄 Horaires chargés depuis l'API : \(parsed.count) éléments | \(currentSemestreName) | volée \(selectedVolee) | modalité \(modalite ?? "aucune") | option \(option ?? "aucune") | fichier du \(dateFichier ?? "?")")
             schedules = parsed
             courses = Array(Set(parsed.map { $0.cours })).sorted()
+            applyOpeningWeek()
 
         } catch APIError.notAvailable(let message) {
             // Horaire pas encore publié : on n'affiche pas le cache, qui peut venir d'une autre source ou d'un autre semestre

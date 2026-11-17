@@ -9,20 +9,20 @@ import Foundation
 
 // MARK: - Réponses de l'API (https://horaires-api.fly.dev/documentation)
 
-/// Un choix proposé pour une volée : modalité ou option (identifiant de l'API + libellé affiché).
+// Un choix proposé pour une volée : modalité ou option (identifiant de l'API + libellé affiché).
 struct APIChoice: Decodable, Hashable {
     let id: String      // ex. "tempsPartiel6", "santeMentale"
     let label: String   // ex. "Temps partiel 6 semestres", "Santé mentale"
 }
 
-/// Une volée et les choix qui la concernent (GET /api/volees).
+// Une volée et les choix qui la concernent (GET /api/volees).
 struct APIVolee: Decodable, Hashable {
     let volee: String          // ex. "IPS 2025"
     let modalites: [APIChoice]
     let options: [APIChoice]
 }
 
-/// Un cours (GET /api/schedule).
+// Un cours (GET /api/schedule).
 struct APICours: Decodable {
     let cours: String
     let contenuCours: String
@@ -35,7 +35,7 @@ struct APICours: Decodable {
     let heureFin: String?    // HH:MM
 }
 
-/// Un examen (GET /api/exams).
+// Un examen (GET /api/exams).
 struct APIExamen: Decodable {
     let cours: String
     let modaliteExamen: String   // forme de l'examen, ex. "Oral individuel" (rien à voir avec la modalité temps plein / partiel)
@@ -60,7 +60,7 @@ struct APIExamsResponse: Decodable {
     let examens: [APIExamen]
 }
 
-/// Corps des réponses d'erreur de l'API : { error } ou { error, message } (404).
+// Corps des réponses d'erreur de l'API : { error } ou { error, message } (404).
 private struct APIErrorBody: Decodable {
     let error: String
     let message: String?
@@ -94,7 +94,7 @@ enum APIError: LocalizedError {
 // MARK: - Semestre au format de l'API
 
 extension SemestreType {
-    /// Valeur du paramètre "semestre" de l'API.
+    // Valeur du paramètre "semestre" de l'API.
     var apiValue: String {
         switch self {
         case .automne:   return "automne"
@@ -108,20 +108,20 @@ extension SemestreType {
 enum APIClient {
     static let baseURL = "https://horaires-api.fly.dev"
 
-    /// 20 secondes : le premier appel après une période sans trafic réveille le serveur (quelques secondes).
+    // 20 secondes : le premier appel après une période sans trafic réveille le serveur (quelques secondes).
     private static let timeout: TimeInterval = 20
 
-    /// Volées du semestre, avec leurs modalités et options (catalogue des cours, utilisé aussi pour les examens).
+    // Volées du semestre, avec leurs modalités et options (catalogue des cours, utilisé aussi pour les examens).
     static func fetchVolees(semestre: SemestreType) async throws -> [APIVolee] {
         try await get("/api/volees", query: [URLQueryItem(name: "semestre", value: semestre.apiValue)])
     }
 
-    /// Cours d'une volée, filtrés par modalité et option (facultatives, identifiants de l'API).
+    // Cours d'une volée, filtrés par modalité et option (facultatives, identifiants de l'API).
     static func fetchSchedule(semestre: SemestreType, volee: String, modalite: String?, option: String?) async throws -> APIScheduleResponse {
         try await get("/api/schedule", query: selectionQuery(semestre: semestre, volee: volee, modalite: modalite, option: option))
     }
 
-    /// Examens d'une volée, mêmes paramètres que fetchSchedule.
+    // Examens d'une volée, mêmes paramètres que fetchSchedule.
     static func fetchExams(semestre: SemestreType, volee: String, modalite: String?, option: String?) async throws -> APIExamsResponse {
         try await get("/api/exams", query: selectionQuery(semestre: semestre, volee: volee, modalite: modalite, option: option))
     }

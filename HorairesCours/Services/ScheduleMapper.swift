@@ -7,8 +7,8 @@
 
 import Foundation
 
-/// Convertit les réponses de l'API en CourseSchedule (modèle SwiftData affiché et mis en cache).
-/// Le modèle CourseSchedule n'est pas modifié (pas de migration SwiftData).
+// Convertit les réponses de l'API en CourseSchedule (modèle SwiftData affiché et mis en cache).
+// Le modèle CourseSchedule n'est pas modifié (pas de migration SwiftData).
 enum ScheduleMapper {
 
     static func schedules(fromCourses courses: [APICours]) -> [CourseSchedule] {
@@ -80,7 +80,7 @@ enum ScheduleMapper {
         return formatter
     }()
 
-    /// Date AAAA-MM-JJ de l'API → minuit UTC, comme l'ancienne lecture Excel (regroupement par jour inchangé).
+    // Date AAAA-MM-JJ de l'API → minuit UTC, comme l'ancienne lecture Excel (regroupement par jour inchangé).
     static func date(fromAPI value: String?) -> Date? {
         guard let value else { return nil }
         return apiDateFormatter.date(from: value)
@@ -91,7 +91,7 @@ enum ScheduleMapper {
         return "\(debut) - \(fin)"
     }
 
-    /// Durée au format de l'app : "3h", "30min", "3h30min" ; vide si incalculable.
+    // Durée au format de l'app : "3h", "30min", "3h30min" ; vide si incalculable.
     private static func duration(_ debut: String?, _ fin: String?) -> String {
         guard let start = minutes(debut), let end = minutes(fin), end > start else { return "" }
         let total = end - start

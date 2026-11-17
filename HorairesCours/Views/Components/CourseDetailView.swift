@@ -29,56 +29,60 @@ struct CourseDetailView: View {
         return schedule.contenuCours
     }
     
+    // Lignes du détail d'un examen rangées dans contenuCours par ScheduleMapper ("🔒 Anonymisation: Oui", "📚 Option clinique")
+    private func examLine(_ prefix: String) -> String? {
+        guard isExamen else { return nil }
+        guard let line = schedule.contenuCours.components(separatedBy: "\n").first(where: { $0.hasPrefix(prefix) }) else { return nil }
+        let value = String(line.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+        return value.isEmpty ? nil : value
+    }
+
+    var anonymisation: String? { examLine("🔒 Anonymisation:") }
+    var examOption: String? { examLine("📚") }
+    
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 
                 // ── Carte header ───────────────────────────────────
-                ZStack(alignment: .bottomLeading) {
-                    // Image TopBar en fond
+                // Hauteur minimale de 260 points ; la carte grandit si le titre est long
+                VStack(alignment: .leading, spacing: 12) {
+                    // Icône
+                    Image("HoraireCoursIcon")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 80, height: 80)
+
+                    Spacer(minLength: 0)
+
+                    // Titre
+                    Text(schedule.cours)
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(.white)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    // Sous-titre
+                    if !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.system(size: 16))
+                            .foregroundColor(.white.opacity(0.85))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    // Date
+                    Text(formattedDate)
+                        .font(.system(size: 15))
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity, minHeight: 260, alignment: .topLeading)
+                .background(
+                    // Image TopBar en fond, à la taille de la carte
                     Image("TopBar")
                         .resizable()
                         .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 260)
-                        .clipped()
-                        .cornerRadius(20)
-                    
-                    // Contenu par-dessus
-                    VStack(alignment: .leading, spacing: 12) {
-                        // Icône
-                        ZStack {
-                            Image("HoraireCoursIcon")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 80, height: 80)
-                        }
-                        
-                        Spacer()
-                        
-                        // Titre
-                        Text(schedule.cours)
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(.white)
-                            .fixedSize(horizontal: false, vertical: true)
-                        
-                        // Sous-titre
-                        if !subtitle.isEmpty {
-                            Text(subtitle)
-                                .font(.system(size: 16))
-                                .foregroundColor(.white.opacity(0.85))
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        
-                        // Date
-                        Text(formattedDate)
-                            .font(.system(size: 15))
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                    .padding(24)
-                    .frame(maxWidth: .infinity, maxHeight: 260, alignment: .topLeading)
-                }
-                .frame(height: 260)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 20))
                 .shadow(color: Color(hex: "7B6FE8").opacity(0.4), radius: 12, y: 6)
                 
                 // ── Informations ───────────────────────────────────
@@ -117,6 +121,26 @@ struct CourseDetailView: View {
                             iconColor: Color(hex: "F57667"),
                             title: "Enseignant",
                             value: schedule.enseignant
+                        )
+                    }
+                    
+                    if let anonymisation {
+                        Divider()
+                        DetailRow(
+                            icon: "eye.slash.fill",
+                            iconColor: Color(hex: "3489D9"),
+                            title: "Anonymisation",
+                            value: anonymisation
+                        )
+                    }
+
+                    if let examOption {
+                        Divider()
+                        DetailRow(
+                            icon: "tag.fill",
+                            iconColor: Color(hex: "FFA365"),
+                            title: "Option",
+                            value: examOption
                         )
                     }
                 }

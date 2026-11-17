@@ -606,8 +606,8 @@ class ExcelParser {
         return false
     }
 
-    /// Vérifie si l'option d'un cours correspond à l'option sélectionnée par l'étudiant.
-    /// Les cours "Tous" / "Toutes orientations" sont toujours affichés.
+    // Vérifie si l'option d'un cours correspond à l'option sélectionnée par l'étudiant.
+    // Les cours "Tous" / "Toutes orientations" sont toujours affichés.
     private static func matchesOption(courseOption: String, selectedOption: String) -> Bool {
         let cleanOption = courseOption.trimmingCharacters(in: .whitespacesAndNewlines)
         let lowerClean  = cleanOption.lowercased()
@@ -692,7 +692,7 @@ class ExcelParser {
         return cell.value?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Convertit un index de colonne (0-based) en lettre Excel (0→A, 1→B, 25→Z, 26→AA…)
+    // Convertit un index de colonne (0-based) en lettre Excel (0→A, 1→B, 25→Z, 26→AA…)
     private static func columnIndexToLetter(_ index: Int) -> String {
         var result = ""
         var n = index
