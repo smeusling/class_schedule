@@ -22,6 +22,17 @@ enum SemestreType: String, Codable {
         // Janvier à Août = Printemps, Septembre à Décembre = Automne
         return (month >= 1 && month <= 8) ? .printemps : .automne
     }
+    
+    /// Semestre présélectionné selon la source (mêmes règles que le site) :
+    /// cours : printemps de janvier à août, automne de septembre à décembre ;
+    /// examens : automne de septembre à février (session de janvier), printemps de mars à août.
+    static func current(for type: DataSourceType, date: Date = Date()) -> SemestreType {
+        let month = Calendar.current.component(.month, from: date)
+        switch type {
+        case .semestre: return (1...8).contains(month) ? .printemps : .automne
+        case .examens:  return (3...8).contains(month) ? .printemps : .automne
+        }
+    }
 }
 
 struct DataSource: Codable {

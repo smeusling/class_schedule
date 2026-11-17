@@ -52,10 +52,11 @@ struct HomeView: View {
     }
     
     private func validateAndContinue() {
-        let source = DataSource.automatic(for: selectedDataSource)
-        viewModel.setDataSource(source)
-        if viewModel.selectedModalites.isEmpty {
-            viewModel.selectedModalites = [.tempsPlein]
+        viewModel.setDataSource(DataSource.automatic(for: selectedDataSource))
+        // Sélection incomplète (modalité ou option à choisir) : on ouvre le sélecteur
+        guard viewModel.isSelectionComplete else {
+            viewModel.showCursusSelector = true
+            return
         }
         viewModel.showHomeView = false
         Task { await viewModel.loadData(forceRefresh: true) }
@@ -118,18 +119,11 @@ struct HomeView: View {
                                                 .foregroundColor(viewModel.selectedVolee == nil ? .gray : .primary)
                                                 .font(.system(size: 16, weight: .medium))
                                             if viewModel.selectedVolee != nil {
-                                                HStack(spacing: 6) {
-                                                    if !viewModel.selectedModalites.isEmpty {
-                                                        Text(viewModel.selectedModalites.map { $0.rawValue }.joined(separator: ", "))
-                                                            .font(.system(size: 13))
-                                                            .foregroundColor(.gray)
-                                                    }
-                                                    if !viewModel.selectedModalites.isEmpty && viewModel.selectedOption != nil {
-                                                        Text("•").font(.system(size: 13)).foregroundColor(.gray)
-                                                    }
-                                                    if let option = viewModel.selectedOption {
-                                                        Text(option).font(.system(size: 13)).foregroundColor(.gray)
-                                                    }
+                                                let details = [viewModel.selectedModaliteLabel, viewModel.selectedOptionLabel].compactMap { $0 }
+                                                if !details.isEmpty {
+                                                    Text(details.joined(separator: " • "))
+                                                        .font(.system(size: 13))
+                                                        .foregroundColor(.gray)
                                                 }
                                             }
                                         }
@@ -158,13 +152,19 @@ struct HomeView: View {
                                         title: "Semestre",
                                         icon: "book.fill",
                                         isSelected: selectedDataSource == .semestre
-                                    ) { selectedDataSource = .semestre }
+                                    ) {
+                                        selectedDataSource = .semestre
+                                        viewModel.setDataSource(DataSource.automatic(for: .semestre))
+                                    }
                                     
                                     DataSourceRadioButton(
                                         title: "Examens",
                                         icon: "pencil.and.list.clipboard",
                                         isSelected: selectedDataSource == .examens
-                                    ) { selectedDataSource = .examens }
+                                    ) {
+                                        selectedDataSource = .examens
+                                        viewModel.setDataSource(DataSource.automatic(for: .examens))
+                                      }
                                 }
                             }
                             .padding(.horizontal)
@@ -326,6 +326,12 @@ struct HomeView: View {
             .navigationBarHidden(true)
             .fullScreenCover(isPresented: $viewModel.showCursusSelector) {
                 VoleeOnlySelector(viewModel: viewModel)
+            }
+            .task {
+                // Catalogue des volées (libellés de la modalité et de l'option, sélection complète ou non)
+                if viewModel.voleeCatalog.isEmpty {
+                    await viewModel.loadCursusList()
+                }
             }
         }
     }

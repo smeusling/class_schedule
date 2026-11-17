@@ -17,32 +17,33 @@ struct TopBarView: View {
                     .font(.system(size: 18, weight: .semibold))
             }
             
-            // ── Volée + option + semestre ──────────────────────────
+            // ── Volée, modalité et option, semestre (trois lignes) ──
             if let volee = viewModel.selectedVolee {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(volee)
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
                         .lineLimit(1)
+
+                    Text(viewModel.currentSemestreName)
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.75))
+                        .lineLimit(1)
                     
-                    HStack(spacing: 4) {
-                        if let option = viewModel.selectedOption {
-                            Text(option)
-                                .font(.system(size: 13))
-                                .foregroundColor(.white.opacity(0.75))
-                                .lineLimit(1)
-                            
-                            Text("·")
-                                .font(.system(size: 13))
-                                .foregroundColor(.white.opacity(0.75))
-                        }
-                        
-                        Text(viewModel.currentSemestreName)
+                    
+                    // Modalité et option ; ligne absente si la volée n'en a pas
+                    let details = [viewModel.selectedModaliteLabel, viewModel.selectedOptionLabel].compactMap { $0 }
+                    if !details.isEmpty {
+                        Text(details.joined(separator: " · "))
                             .font(.system(size: 13))
                             .foregroundColor(.white.opacity(0.75))
                             .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
+
+                    
                 }
+                .layoutPriority(1)
             }
             
             Spacer()

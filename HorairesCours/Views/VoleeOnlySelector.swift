@@ -7,13 +7,9 @@ struct VoleeOnlySelector: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isAtBottom = false
     
-    private var availableOptions: [String] {
-        guard let selectedVolee = viewModel.selectedVolee,
-              let options = viewModel.optionsByVolee[selectedVolee] else {
-            return []
-        }
-        return options
-    }
+    // Choix de la volée sélectionnée, fournis par l'API
+    private var modaliteChoices: [APIChoice] { viewModel.selectedVoleeInfo?.modalites ?? [] }
+    private var optionChoices: [APIChoice] { viewModel.selectedVoleeInfo?.options ?? [] }
     
     var body: some View {
         GeometryReader { geometry in
@@ -105,7 +101,7 @@ struct VoleeOnlySelector: View {
                                         .foregroundColor(.primary)
                                         .multilineTextAlignment(.center)
                                     
-                                    Text("Le fichier Excel de l'UNIL est introuvable.\nVérifiez votre connexion ou contactez le support.")
+                                    Text(viewModel.errorMessage ?? "Le serveur des horaires est injoignable.\nVérifiez votre connexion ou contactez le support.")
                                         .font(.system(size: 14))
                                         .foregroundColor(.gray)
                                         .multilineTextAlignment(.center)
@@ -189,25 +185,26 @@ struct VoleeOnlySelector: View {
                                     }
                                     .padding(.horizontal)
                                     
-                                    // Section Options (si disponibles)
-                                    if !availableOptions.isEmpty {
+                                    // Section Option : seulement si la volée en propose au moins deux
+                                    // (une option unique est retenue d'office)
+                                    if optionChoices.count >= 2 {
                                         VStack(alignment: .leading, spacing: 8) {
                                             Text("Option")
                                                 .font(.system(size: 13, weight: .semibold))
                                                 .foregroundColor(.gray)
                                                 .textCase(.uppercase)
                                                 .padding(.horizontal, 4)
-                                            
+
                                             VStack(spacing: 0) {
-                                                ForEach(availableOptions, id: \.self) { option in
+                                                ForEach(optionChoices, id: \.id) { choice in
                                                     VStack(spacing: 0) {
                                                         OptionListRow(
-                                                            option: option,
-                                                            isSelected: viewModel.selectedOption == option
+                                                            option: choice.label,
+                                                            isSelected: viewModel.selectedOptionId == choice.id
                                                         ) {
-                                                            viewModel.selectedOption = option
+                                                            viewModel.selectedOptionId = choice.id
                                                         }
-                                                        if option != availableOptions.last {
+                                                        if choice != optionChoices.last {
                                                             Divider().padding(.leading, 16)
                                                         }
                                                     }
@@ -218,35 +215,37 @@ struct VoleeOnlySelector: View {
                                         }
                                         .padding(.horizontal)
                                     }
-                                    
-                                    // Section Modalité
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("Modalité")
-                                            .font(.system(size: 13, weight: .semibold))
-                                            .foregroundColor(.gray)
-                                            .textCase(.uppercase)
-                                            .padding(.horizontal, 4)
-                                        
-                                        VStack(spacing: 0) {
-                                            ModaliteListRow(
-                                                title: "Temps Plein",
-                                                isSelected: viewModel.selectedModalites.contains(.tempsPlein) && !viewModel.selectedModalites.contains(.partiel)
-                                            ) {
-                                                viewModel.selectedModalites = [.tempsPlein]
+
+                                    // Section Modalité : même règle
+                                    if modaliteChoices.count >= 2 {
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            Text("Modalité")
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundColor(.gray)
+                                                .textCase(.uppercase)
+                                                .padding(.horizontal, 4)
+
+                                            VStack(spacing: 0) {
+                                                ForEach(modaliteChoices, id: \.id) { choice in
+                                                    VStack(spacing: 0) {
+                                                        ModaliteListRow(
+                                                            title: choice.label,
+                                                            isSelected: viewModel.selectedModaliteId == choice.id
+                                                        ) {
+                                                            viewModel.selectedModaliteId = choice.id
+                                                        }
+                                                        if choice != modaliteChoices.last {
+                                                            Divider().padding(.leading, 16)
+                                                        }
+                                                    }
+                                                }
                                             }
-                                            Divider().padding(.leading, 16)
-                                            ModaliteListRow(
-                                                title: "Temps Partiel",
-                                                isSelected: viewModel.selectedModalites.contains(.partiel) && !viewModel.selectedModalites.contains(.tempsPlein)
-                                            ) {
-                                                viewModel.selectedModalites = [.partiel]
-                                            }
+                                            .background(Color(UIColor.secondarySystemGroupedBackground))
+                                            .cornerRadius(14)
                                         }
-                                        .background(Color(UIColor.secondarySystemGroupedBackground))
-                                        .cornerRadius(14)
+                                        .padding(.horizontal)
                                     }
-                                    .padding(.horizontal)
-                                    
+                                
                                     Spacer().frame(height: 20)
                                 }
                                 .padding(.top, 20)
@@ -286,7 +285,7 @@ struct VoleeOnlySelector: View {
                 }
                 
                 // ── Bouton Sauvegarder flottant ────────────────────────
-                let canSave = viewModel.selectedVolee != nil && !viewModel.selectedModalites.isEmpty
+                let canSave = viewModel.isSelectionComplete
                 let showSave = !viewModel.availableVolees.isEmpty && !viewModel.isLoading
                 
                 PrimaryButton(title: "Sauvegarder") { if canSave { dismiss() } }
